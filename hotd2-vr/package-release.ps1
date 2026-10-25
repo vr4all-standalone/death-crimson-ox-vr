@@ -1,17 +1,17 @@
 <#
-  Packages Lupin the Third VR builds for the Quest and PC (implementation remains in progress)
+  Packages Death Crimson OX VR builds for the Quest and PC (implementation remains in progress)
   in dist\ (packaging checks do not establish gameplay or headset validation):
 
-    lupin-the-third-vr-quest.apk   the Quest app (Quest 3, 3S, 2, Pro)
-    lupin-the-third-vr-pcvr.zip    the PC version with VR on (flycast.exe, emu.cfg, README.txt,
-                                        LICENSE.txt, Play Lupin the Third.cmd; with the bundled
+    death-crimson-ox-vr-quest.apk   the Quest app (Quest 3, 3S, 2, Pro)
+    death-crimson-ox-vr-pcvr.zip    the PC version with VR on (flycast.exe, emu.cfg, README.txt,
+                                        LICENSE.txt, Play Death Crimson OX.cmd; with the bundled
                                         models also CREDITS.txt and data\models\)
 
   Neither holds anything of the game: the players bring their own, and what the app makes from it
   is made on the spot. Both are checked for that (the names in their file lists: discs, keys,
   rips, frame grabs, models made from a game), and the APK for its signer: signed with the public
   debug key (no release key, see make-release-key.ps1) it is refused, since anyone could sign an
-  "update" of the app with that key. The APK is also checked for being Lupin the Third VR
+  "update" of the app with that key. The APK is also checked for being Death Crimson OX VR
   (its package, version and label, and its start screen the only entry in the headset's library),
   and the zip for holding exactly its files, with a README.txt that names no other game.
 
@@ -50,17 +50,17 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 # The app: its application ID, label and version (shell\android-studio\flycast\build.gradle.kts and
 # src\vr\AndroidManifest.xml), its library entry, and the PC zip's start script (hotd2-vr\assets).
-$appId = 'com.vrlightgunhub.lupin'
-$appLabel = 'Lupin the Third VR'
+$appId = 'com.vrlightgunhub.deathcrimsonox'
+$appLabel = 'Death Crimson OX VR'
 $appVersion = '1.0.0'
-$appLauncher = 'com.flycast.emulator.LupinStartActivity'
-$playCmd = 'Play Lupin the Third.cmd'
+$appLauncher = 'com.flycast.emulator.DeathCrimsonStartActivity'
+$playCmd = 'Play Death Crimson OX.cmd'
 
 # What must never be in a release: game discs and keys, rips (rip\), frame grabs, models made
 # from a game (the app makes those on the player's device, from the player's game), and archives
 # or disc images inside it (a ROM set, a BIOS zip). Signing material stays private too.
 $bannedNames = '*.chd', '*.gdi', '*.cue', '*.cdi', '*.pic', 'shot_*.png', 'hands*.bin', 'staff*.bin', 'HND1*.bin',
-	'gun-*.bin', '*.zip', '*.7z', '*.rar', '*.iso', '*.jks', '*.keystore', 'release-signing.properties'
+	'gun-*.bin', '*.zip', '*.7z', '*.rar', '*.iso', '*.jks', '*.keystore', 'release-signing.properties', '*.ic*', 'dcox_us.*', '*.ram', '*.nvmem', '*.eeprom', '*.state'
 $bannedDirs = 'rip', '.vrlightgunhub'
 
 # The entries of a zip or APK whose names are on the lists above.
@@ -186,6 +186,11 @@ function Read-ZipEntry([string]$archive, [string]$name) {
 	} finally { $z.Dispose() }
 }
 
+# The policy-disabled executable is for local research only. Its optimized binary omits
+# the rejection diagnostic; require the compiled guard in both platform artifacts.
+function Test-StandalonePolicy([byte[]]$bytes) {
+    $bytes -and [Text.Encoding]::ASCII.GetString($bytes).Contains('Death Crimson OX VR supports the verified Death Crimson OX Japan Rev A cartridge set (deathcoxj.zip).')
+}
 # A built binary names this commit: the version core\version.h gave it (v<tag>-<n>-g<commit>).
 function Test-NamesCommit([string]$what, [byte[]]$bytes, [string]$hash) {
 	if ($bytes -and [Text.Encoding]::ASCII.GetString($bytes) -match ([regex]::Escape("-g$hash") + '(?![0-9a-fA-F])')) {
@@ -231,7 +236,7 @@ function Find-AppIdentityFault([string[]]$badgingLines, [string[]]$manifestTree,
     if ($launchers.Count -ne 1 -or $launchers[0] -ne $appLauncher) {
         "the library entries (LAUNCHER) are '$($launchers -join "', '")', not $appLauncher alone"
     }
-    if (@($manifestTree | Where-Object { $_ -match 'VrSetupActivity|CmStartActivity' }).Count) { 'the manifest still has an older setup activity' }
+    if (@($manifestTree | Where-Object { $_ -match 'VrSetupActivity|CmStartActivity|LupinStartActivity' }).Count) { 'the manifest still has an older setup activity' }
     if (-not @($manifestTree | Where-Object { $_ -match '"com\.oculus\.permission\.RENDER_MODEL"' }).Count) {
         'the manifest has no com.oculus.permission.RENDER_MODEL (the controllers drawn in the hands)'
     }
@@ -248,10 +253,10 @@ function Find-PcArchiveFault([string]$archive, [string[]]$expectedFiles) {
     }
     $readmeBytes = Read-ZipEntry $archive 'README.txt'
     $readme = if ($readmeBytes) { [Text.Encoding]::ASCII.GetString($readmeBytes) } else { '' }
-    foreach ($required in @($appLabel, 'roms\lupinshoo.zip', 'roms\lupinshoo\gds-0018.chd', 'roms\naomi.zip', $playCmd)) {
+    foreach ($required in @($appLabel, 'roms\deathcoxj.zip', 'roms\naomi.zip', $playCmd)) {
         if (-not $readme.Contains($required)) { "README.txt does not name $required" }
     }
-    foreach ($other in @('Light Gun Hub', 'House of the Dead', 'Maze of the Kings', 'Confidential Mission')) {
+    foreach ($other in @('Light Gun Hub', 'House of the Dead', 'Maze of the Kings')) {
         if ($readme -match [regex]::Escape($other)) { "README.txt names $other; its play instructions must be for $appLabel" }
     }
     $configBytes = Read-ZipEntry $archive 'emu.cfg'
@@ -262,7 +267,7 @@ function Find-PcArchiveFault([string]$archive, [string[]]$expectedFiles) {
     $launcherBytes = Read-ZipEntry $archive $playCmd
     $launcher = if ($launcherBytes) { [Text.Encoding]::ASCII.GetString($launcherBytes) } else { '' }
     if ($launcher -notmatch 'start\s+""\s+/D\s+"%~dp0"' -or -not $launcher.Contains('"%~dp0flycast.exe"') -or
-        -not $launcher.Contains('"%~dp0roms\lupinshoo.zip"')) { "$playCmd does not launch the original set with a portable working directory" }
+        -not $launcher.Contains('"%~dp0roms\deathcoxj.zip"')) { "$playCmd does not launch the original set with a portable working directory" }
 }
 # the working tree as committed (the gamesdk submodule's local change aside)
 $head = Invoke-Git rev-parse HEAD
@@ -301,9 +306,9 @@ if (-not $SkipBuild) {
 	if ($LASTEXITCODE -ne 0) { throw 'build-quest.cmd failed' }
 }
 New-Item -ItemType Directory -Force $dist | Out-Null
-$apkOut = Join-Path $dist 'lupin-the-third-vr-quest.apk'
-$zip = Join-Path $dist 'lupin-the-third-vr-pcvr.zip'
-$stage = Join-Path $dist 'lupin-the-third-vr-pcvr'
+$apkOut = Join-Path $dist 'death-crimson-ox-vr-quest.apk'
+$zip = Join-Path $dist 'death-crimson-ox-vr-pcvr.zip'
+$stage = Join-Path $dist 'death-crimson-ox-vr-pcvr'
 foreach ($f in $apkOut, $zip) { if (Test-Path $f) { (Get-Item $f).Delete() } }   # never leave an old one
 
 # the Quest app: who signed it
@@ -361,6 +366,10 @@ if (-not $AllowDebugKey) {
 		exit 1
 	}
 }
+if (-not (Test-StandalonePolicy (Read-ZipEntry $apk 'lib/arm64-v8a/libflycast.so')) -or
+    -not (Test-StandalonePolicy ([IO.File]::ReadAllBytes((Join-Path $repo 'build-win\flycast.exe'))))) {
+    throw 'Research build with standalone game policy OFF cannot be packaged. Rebuild both platforms with VR_STANDALONE_DEATHCRIMSONOX=ON.'
+}
 Copy-Item $apk $apkOut
 
 # the PC version: VR on, OpenGL (the only renderer VR draws with)
@@ -412,39 +421,35 @@ rend.NativeDepthInterpolation = yes
 vr.Xr = yes
 '@
 $readme = @'
-Lupin the Third VR, PC development build
+Death Crimson OX VR, PC development build
 
-Implementation in progress. The CM 1.2 feature set is ported with Lupin-specific camera,
-calibration, native shot state and gun extraction. Physical headset validation and later-stage
-coverage remain pending. See the source validation report and physical headset checklist.
-This build inherits Flycast and mikermak's hotd2-vr (https://github.com/mikermak/hotd2-vr).
-Check the source README and Lupin findings for the current verified scope.
+Implementation in progress. See the source validation report and physical headset checklist
+for the current verified scope. This build inherits Flycast and mikermak's hotd2-vr
+(https://github.com/mikermak/hotd2-vr), Confidential Mission VR and Lupin VR.
 
-1. Make a folder named roms next to flycast.exe and add your own original MAME set lupinshoo:
-     roms\lupinshoo.zip             the original game, with 317-0325-jpn.pic inside
-     roms\lupinshoo\gds-0018.chd    original GDS-0018 disc
-     roms\naomi.zip                 supported NAOMI BIOS, or its BIOS file in lupinshoo.zip
-   A complete gds-0018.cue or gds-0018.gdi with all its tracks may replace the CHD.
-   Raw CUE/GDI boot is untested. Rev A uses lupinsho/gds-0018a and is not supported.
-   The original CHD header SHA1 is 3b7d5dd917b9a2cc9b7b51aad22f8e75383c3301.
-   Keep original files untouched; use a separate correctly named copy for this app.
+1. Make a folder named roms next to flycast.exe and add your own complete MAME cartridge set:
+     roms\deathcoxj.zip   Death Crimson OX, Japan Rev A
+     roms\naomi.zip       supported NAOMI BIOS, or the BIOS file inside deathcoxj.zip
+   No CHD, CUE or GDI is needed. Japan Rev A contains epr-23524a.ic22 (4 MiB,
+   CRC b60e113e), plus all ten mpr-23514.ic1 through mpr-23523.ic10 chips (8 MiB each).
+   An older merged archive called deathcox.zip may contain these Japan chips: keep the original
+   unchanged and use a separate complete copy named deathcoxj.zip. Modern deathcox.zip is USA
+   (dcox_us.ic22), and deathcoxo.zip is original Japan: those revisions are not verified here.
 2. Connect the headset to the active OpenXR runtime (for example SteamVR or Quest Link).
-3. Double-click "Play Lupin the Third.cmd". It starts flycast.exe with roms\lupinshoo.zip
+3. Double-click "Play Death Crimson OX.cmd". It starts flycast.exe with roms\deathcoxj.zip
    and the archive folder as its working directory, so this copy uses its own emu.cfg.
 
-Controls: trigger shoots, A is P1 Start, B is P1 Reload;
-X is P2 Start and Y is P2 Reload by default. Hands swaps the players and labels; with two
-players active their guns/reload buttons swap too. Left Menu opens settings, left stick click recenters,
-right stick click toggles the laser. The paused menu includes gun choice/angle, both reload
-modes, Hands, haptics Off/Light/Medium/Strong, world size, panel distance, wider view,
-How to play and confirmed Quit. Hands are empty during noninteractive story scenes.
-First start makes a complete pistol from your own game. B skips; a later start retries.
-P1 has seven rounds, P2 six; native accepted rounds drive recoil/flash/haptics. No game data
-or generated gun cache is supplied.
-Without an OpenXR headset, use the desktop window for development. emu.cfg enables VR
-(vr.Xr = yes), OpenGL (pvr.rend = 0) and native depth interpolation.
+Controls: either trigger shoots and selects the hand in single-player. In two-player play,
+P1 defaults to the left hand and P2 to the right. Swap P1/P2 is On by default; Off reverses them.
+A/X start the player on that controller; B/Y reload. Left Menu opens settings, left stick
+click recenters, and right stick click toggles the laser. The paused menu includes gun choice,
+gun angle, reload modes, haptics, world size, panel distance, wider view, How to play and Quit.
+This build offers the credited Arcade gun and Zapper plus custom GLB models. No complete
+native player pistol was verified; no generated native model, save state, game ROM or BIOS
+is supplied. Physical headset checks remain pending.
+emu.cfg enables VR (vr.Xr = yes), OpenGL (pvr.rend = 0) and native depth interpolation.
 
-No game is included. Unofficial fan project, not affiliated with Sega.
+No game is included. Unofficial fan project, not affiliated with Sega or Ecole.
 
 Credits: Flycast by flyinghead and contributors (https://github.com/flyinghead/flycast,
 GPL-2.0-or-later). hotd2-vr by mikermak (GPL-2.0-or-later).
@@ -477,12 +482,12 @@ try {
 	}
 } finally { $archive.Dispose(); $out.Dispose() }
 
-# The zip contains exactly its files, portable defaults and launcher, and Lupin's own instructions.
+# The zip contains exactly its files, portable defaults and launcher, and Death Crimson's own instructions.
 $zipFiles = @('flycast.exe', 'emu.cfg', 'README.txt', 'LICENSE.txt', $playCmd) + $modelFiles
 $zipFaults = @(Find-PcArchiveFault $zip $zipFiles)
 $zipGood = $zipFaults.Count -eq 0
 if ($zipGood) {
-    Write-Host "zip check: $(Split-Path -Leaf $zip) holds exactly $($zipFiles -join ', '), with Lupin instructions and portable defaults"
+    Write-Host "zip check: $(Split-Path -Leaf $zip) holds exactly $($zipFiles -join ', '), with Death Crimson instructions and portable defaults"
 } else {
     $zipFaults | ForEach-Object { Write-Host "zip check: $_" -ForegroundColor Red }
 }

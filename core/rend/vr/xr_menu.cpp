@@ -28,14 +28,14 @@ namespace
 constexpr float Distance = 1.2f, BelowEyes = 0.1f;
 constexpr int Left = 0, Right = 1;
 
-const char *const Labels[Rows] { "Resume", "Recenter", "Gun", "Gun angle", "Reload", "Hands", "Laser", "Haptics",
+const char *const Labels[Rows] { "Resume", "Recenter", "Gun", "Gun angle", "Reload", "Swap P1/P2", "Laser", "Haptics",
 		"World size", "Panel distance", "Wider view", "How to play", "Quit" };
 const char *const HapticsNames[4] { "Off", "Light", "Medium", "Strong" };
 // vr.Haptics' words, saved by the Haptics row (hapticsLevel() reads them, and 1.2's numbers)
 const char *const HapticsWords[4] { "off", "light", "medium", "strong" };
 const char *const ReloadNames[2] { "Shoot off-screen", "Point off-screen" };
-// vr.P1Hand by p1Hand() (0 left, 1 right), the user's words: the game shows P1 on the left, P2 on the right
-const char *const HandsNames[2] { "P1 left hand - P2 right hand", "P1 right hand - P2 left hand" };
+// Two-player assignment only (p1Hand(): 0 left, 1 right); solo follows either trigger.
+const char *const HandsNames[2] { "On: P1 left / P2 right", "Off: P1 right / P2 left" };
 constexpr int GunAngleMax = 30;	// vr.GunAngle's range, degrees either way
 
 glm::mat4 model { 1.f };	// the panel: its middle, facing the player (+z)
@@ -219,9 +219,8 @@ void change(int row, int dir, int hand)
 	case Hands:
 	{
 		// with two players in, the guns swap hands once the menu closes (xr_host.cpp updateLightgun)
-		const char *const hand = p1Hand() == Right ? "left" : "right";
-		config::VrP1Hand.set(hand);
-		config::saveStr("config", "vr.P1Hand", hand);
+		config::VrSwapP1P2.set(!config::VrSwapP1P2);
+		config::saveBool("config", "vr.SwapP1P2", config::VrSwapP1P2);
 		break;
 	}
 	case Laser:

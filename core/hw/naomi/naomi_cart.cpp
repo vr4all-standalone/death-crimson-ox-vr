@@ -22,6 +22,7 @@
 
 #include <memory>
 #include "naomi_cart.h"
+#include "standalone_game.h"
 #include "naomi_regs.h"
 #include "naomi.h"
 #include "decrypt.h"
@@ -217,6 +218,12 @@ static void loadMameRom(const std::string& path, const std::string& fileName, Lo
 	if (game == nullptr)
 		throw NaomiCartException(Ts("Unknown game"));
 
+	int romCount = 0;
+	while (game->blobs[romCount].filename != nullptr)
+		++romCount;
+	if (const char *error = vr::standaloneArcadeSetError(game->name, game->cart_type == M2, game->size, romCount))
+		throw NaomiCartException(error);
+
 	// Open archive and parent archive if any
 	std::unique_ptr<Archive> archive(OpenArchive(path));
 	if (archive != NULL)
@@ -298,9 +305,6 @@ static void loadMameRom(const std::string& path, const std::string& fileName, Lo
 
 		MD5Sum md5;
 
-		int romCount = 0;
-		while (game->blobs[romCount].filename != nullptr)
-			romCount++;
 		for (int romid = 0; romid < romCount; romid++)
 		{
 			if (progress != nullptr)
@@ -317,6 +321,9 @@ static void loadMameRom(const std::string& path, const std::string& fileName, Lo
 			}
 
 			u32 len = game->blobs[romid].length;
+			if (const char *error = vr::standaloneArcadeChipMetadataError(romid, game->blobs[romid].offset,
+					len, game->blobs[romid].crc, game->blobs[romid].blob_type == Normal))
+				throw NaomiCartException(strprintf("%s Invalid chip definition: %s", error, game->blobs[romid].filename));
 
 			if (game->blobs[romid].blob_type == Copy)
 			{
@@ -355,7 +362,14 @@ static void loadMameRom(const std::string& path, const std::string& fileName, Lo
 							u8 *dst = (u8 *)CurrentCartridge->GetPtr(game->blobs[romid].offset, len);
 							if (dst == nullptr)
 								throw NaomiCartException(strprintf(T("Invalid ROM: truncated %s"), game->blobs[romid].filename));
+#if defined(VR_STANDALONE_DEATHCRIMSONOX) && VR_STANDALONE_DEATHCRIMSONOX
+							const auto archiveLength = file->length();
+#endif
 							u32 read = file->Read(dst, game->blobs[romid].length);
+#if defined(VR_STANDALONE_DEATHCRIMSONOX) && VR_STANDALONE_DEATHCRIMSONOX
+							if (const char *error = vr::standaloneArcadeChipError(romid, archiveLength, read, dst))
+								throw NaomiCartException(strprintf("%s Invalid or truncated chip: %s", error, game->blobs[romid].filename));
+#endif
 							if (config::GGPOEnable)
 								md5.add(dst, game->blobs[romid].length);
 							DEBUG_LOG(NAOMI, "Mapped %s: %x bytes at %07x", game->blobs[romid].filename, read, game->blobs[romid].offset);
@@ -614,6 +628,9 @@ static void loadDecryptedRom(const std::string& path, const std::string& fileNam
 void naomi_cart_LoadRom(const std::string& path, const std::string& fileName, LoadProgress *progress)
 {
 	naomi_cart_Close();
+	const std::string mediaExtension = get_file_extension(fileName);
+	if (const char *error = vr::standaloneArcadeMediaError(mediaExtension == "zip" || mediaExtension == "7z", settings.naomi.slave))
+		throw NaomiCartException(error);
 
 	if (settings.naomi.slave)
 	{

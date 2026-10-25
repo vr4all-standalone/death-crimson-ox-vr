@@ -31,6 +31,7 @@
 #include <vector>
 #include <array>
 #include "rend/vr/gun_calibration.h"
+#include "rend/vr/death_gun.h"
 
 namespace vr
 {
@@ -307,7 +308,7 @@ struct GameProfile
 		u32 base = 0, stride = 0; u8 ammo = 0, magazine = 0, shots = 0;
 		s16 weapon = -1; u8 rifleValue = 0; u32 playing = 0;
 		// Float-valued VM variables instead of the byte/u16 block (original Lupin).
-		bool floats = false; u32 session = 0, active = 0;
+		bool floats = false, deathCrimson = false; u32 session = 0, active = 0;
 		int shotWaitMs = 100;
 		CodeGuard guards[6] {};
 	} gunRam;
@@ -669,6 +670,50 @@ static std::vector<GameProfile> makeProfiles()
 	p.model.guns[1] = { "in-game pistol", "gun-lp-pistol.bin", { 0xb80800 }, 24, 24, 0.22f, true,
 			{ 24 }, 12, { 1.f, 0.52442f, 0.08799f }, 0.05f, 0.f, 0.2f };
 	list.push_back(p);
+
+    // Death Crimson OX, NAOMI Japan Rev A, epr-23524a.ic22. The guarded
+    // camera builder uses a scalar focal, not a normalized projection matrix.
+    // dc-reva-baseline / dc-route-port measure 554.29718 pixels (angle 10922).
+    // HUD layers use W=1,2,3 and z=27/18; the world near clip is 20 units.
+    p = GameProfile();
+    p.gameId = "DEATH CRIMSON OX";
+    p.gunMenu = true;
+    p.analogOffscreenReload = true;
+    p.gunRam.deathCrimson = true;
+    p.gunRam.base = 0x18BFC8; p.gunRam.stride = 60;
+    p.gunRam.shotWaitMs = 200;
+    p.p2PromptTextures[0] = 0xA90800; // PRESS START BUTTON
+    p.p2PromptTextures[1] = 0xA99800; // FREE PLAY, separate texture
+    p.p2PromptBox = { 430.f, 400.f, 660.f, 460.f };
+    p.p2PromptMinSize = { 100.f, 8.f };
+    p.p2HideTrailing = false;
+    p.p2PromptSinglePlayerOnly = true;
+    p.liveFocalAddr = 0x86A588;
+    p.focalGuards[0] = { 0x0B8454, 0xD225 };
+    p.focalGuards[1] = { 0x0B845E, 0x54E7 };
+    p.focalGuards[2] = { 0x0B847E, 0xF3CA };
+    p.focalGuards[3] = { 0x0B84F6, 0x8C86 };
+    p.focal = 554.29718f;
+    p.fovScale = 2.f;
+    p.fovPatch[0] = { 0x0B846C, 0x4421, 0x0009 };
+    p.fovPatch[1] = { 0x0B846A, 0x410B, 0x410B };
+    p.fovPatch[2] = { 0x0B8454, 0xD225, 0xD225 };
+    p.fovPatch[3] = { 0x0B845E, 0x54E7, 0x54E7 };
+    p.fovPatch[4] = { 0x0B8476, 0xD31F, 0xD31F };
+    p.fovPatch[5] = { 0x0B847E, 0xF3CA, 0xF3CA };
+    p.fovPatch[6] = { 0x0B84F4, 0xA588, 0xA588 };
+    p.fovPatch[7] = { 0x0B84F6, 0x8C86, 0x8C86 };
+    p.stockFocalAddr = 0x86A588; // native hit polygons use the same live projection (0x059FD8 -> 0x0AE45C)
+    p.hudW = .9f;
+    p.snapMinW = .03f; p.snapMaxW = 3.1f;
+    p.snapStep = 1.f / 30.f; p.snapInverseDepth = true;
+    p.offScreen2DMaxW = 3.1f;
+    p.letterboxW = 1.666667f;
+    p.flatScreens = true;
+    p.farOutBelowW = 19.99f;
+    // A captured human mesh is about 131 game units high; .12 yields about 1.73 m at the default world size.
+    p.unitScale = .12f;
+    list.push_back(p);
 	return list;
 }
 static const std::vector<GameProfile> profiles = makeProfiles();
@@ -720,6 +765,20 @@ bool gameAnalogOffscreenReload() {
 void calibrateGunInput(int player, int& x, int& y)
 {
 	const GameProfile *prof = activeProfile;
+    if (prof != nullptr && prof->gunRam.deathCrimson && player >= 0 && player < 2)
+    {
+        death::Calibration calibration;
+        if (!death::readCalibration(player,
+                [](unsigned a) { return ReadMem16_nommu(0x8C000000u + a); },
+                [](unsigned a) { return ReadMem32_nommu(0x8C000000u + a); }, calibration)) return;
+        static death::CalibrationMap maps[2];
+        static std::mutex mutex;
+        std::lock_guard<std::mutex> lock(mutex);
+        const bool fresh = !maps[player].ready;
+        if (death::calibrateInput(calibration, true, maps[player], x, y) && fresh)
+            NOTICE_LOG(RENDERER, "VR: P%d Death Crimson calibration inverse (EEPROM unchanged)", player + 1);
+        return;
+    }
 	if (prof == nullptr || prof->calibrationAddr == 0 || player < 0 || player > 1 || x < 0 || x >= 640 || y < 0 || y >= 480)
 		return;
 	for (const CodeGuard& g : prof->calibrationGuards)
@@ -950,6 +1009,23 @@ static void snapGuns(Event, void *)
 {
 	const GameProfile *prof = activeProfile;
 	u8 enabled = 0;
+    death::Gun native[2];
+    const bool isDeath = prof != nullptr && prof->gunRam.deathCrimson;
+    if (isDeath)
+    {
+        for (int player = 0; player < 2; ++player)
+            native[player] = death::readGun(player,
+                [](unsigned a) { return ReadMem8_nommu(0x8C000000u + a); },
+                [](unsigned a) { return ReadMem16_nommu(0x8C000000u + a); },
+                [](unsigned a) { return ReadMem32_nommu(0x8C000000u + a); });
+        const bool known = native[0].known && native[1].known;
+        if (known) enabled = (native[0].active ? 1 : 0) | (native[1].active ? 2 : 0);
+        const u8 was = vmPlayers.exchange(enabled);
+        vmPlayersKnown = known;
+        for (int player = 0; player < 2; ++player)
+            if (((was ^ enabled) >> player) & 1)
+                NOTICE_LOG(RENDERER, "VR: P%d active %s", player + 1, ((enabled >> player) & 1) ? "on" : "off");
+    }
 	bool vmValid = prof != nullptr && prof->gunRam.floats;
 	if (vmValid)
 	{
@@ -973,7 +1049,13 @@ static void snapGuns(Event, void *)
 			continue;
 		const GameProfile::GunRam& ram = prof->gunRam;
 		GunState now {};
-		if (ram.floats)
+        if (isDeath)
+        {
+            now.valid = native[player].known && native[player].active;
+            now.ammo = native[player].ammo; now.magazine = native[player].magazine;
+            now.shots = (u16)native[player].shots;
+        }
+        else if (ram.floats)
 		{
 			u32 ammo = 0, magazine = 0, shots = 0;
 			const bool counts = vmValid && vmCount(block + ram.ammo, 255, ammo)
@@ -1002,14 +1084,15 @@ static void snapGuns(Event, void *)
 			// byte compared signed: a shot is -1, a refill at most +45, and the scope view's 10000
 			// rounds, 0x2710, wrap the byte at its 17th shot)
 			const int rises = (s16)(u16)(now.shots - was.shots);
-			if (rises > 0 && rises <= 8 && (now.rifle || was.rifle || (s8)(now.ammo - was.ammo) < 0))
+			// Death Crimson updates ammo before its accepted-shot counter; that counter already excludes empty pulls.
+			if (rises > 0 && rises <= 8 && (isDeath || now.rifle || was.rifle || (s8)(now.ammo - was.ammo) < 0))
 				now.fired += rises;
 			if (now.magazine != was.magazine)
 				NOTICE_LOG(RENDERER, "VR: P%d magazine %d -> %d", player + 1, was.magazine, now.magazine);
 			if (now.rifle != was.rifle)
 				NOTICE_LOG(RENDERER, "VR: P%d weapon %s -> %s", player + 1, was.rifle ? "rifle" : "pistol", now.rifle ? "rifle" : "pistol");
 		}
-		if (ram.floats && now.valid && !was.valid)
+		if ((ram.floats || isDeath) && now.valid && !was.valid)
 			NOTICE_LOG(RENDERER, "VR: P%d magazine 0 -> %d", player + 1, now.magazine);
 		gunSnaps[player] = now;
 	}
@@ -1862,7 +1945,7 @@ static void hidePlayer2Prompt(rend_context& ctx, const RenderPass& pass, const R
 }
 
 bool player2Prompting() {
-	if (activeProfile != nullptr && activeProfile->gunRam.floats)
+	if (activeProfile != nullptr && (activeProfile->gunRam.floats || activeProfile->gunRam.deathCrimson))
 		return (vmPlayers.load() & 2) == 0;
 	return steadyMs() - p2PromptAt < 500;
 }
@@ -1890,9 +1973,25 @@ static void closeCutsceneFrame(Event, void *)
 		withBars = without = 0;
 		cutsceneOn = false;
 	}
-	if (prof == nullptr || (prof->letterboxTextures[0] == 0 && !prof->movieCutscenes) || (prof->gunRam.playing == 0 && !prof->gunRam.floats) || cutscenePasses.exchange(0) == 0)
-		return;
-	const bool bars = cutsceneBars.exchange(0) > 0;
+    bool bars = false, inGame = false;
+    if (prof != nullptr && prof->gunRam.deathCrimson)
+    {
+        if (cutscenePasses.exchange(0) == 0) return;
+        const death::Scene scene = death::readScene(
+            [](unsigned a) { return ReadMem16_nommu(0x8C000000u + a); },
+            [](unsigned a) { return ReadMem32_nommu(0x8C000000u + a); });
+        bars = scene.known && scene.movie;
+        inGame = vmPlayersKnown.load() && vmPlayers.load() != 0;
+        cutsceneBars = 0;
+    }
+    else
+    {
+        if (prof == nullptr || (prof->letterboxTextures[0] == 0 && !prof->movieCutscenes) ||
+                (prof->gunRam.playing == 0 && !prof->gunRam.floats) || cutscenePasses.exchange(0) == 0) return;
+        bars = cutsceneBars.exchange(0) > 0;
+        const u8 playing = prof->gunRam.playing != 0 ? ReadMem8_nommu(0x8C000000u | (prof->gunRam.playing & 0x01FFFFFFu)) : 0;
+        inGame = prof->gunRam.floats ? vmPlayers.load() != 0 : (playing & ~3) == 0 && (playing & 3) != 0;
+    }
 	if (bars)
 	{
 		withBars++;
@@ -1900,9 +1999,6 @@ static void closeCutsceneFrame(Event, void *)
 	}
 	else if (++without >= CutsceneOffFrames)
 		withBars = 0;
-	// (the players' byte holds their two bits only: anything else is the RAM before the game clears it)
-	const u8 playing = prof->gunRam.playing != 0 ? ReadMem8_nommu(0x8C000000u | (prof->gunRam.playing & 0x01FFFFFFu)) : 0;
-	const bool inGame = prof->gunRam.floats ? vmPlayers.load() != 0 : (playing & ~3) == 0 && (playing & 3) != 0;
 	const bool on = inGame && withBars >= CutsceneOnFrames;
 	if (on != cutsceneOn)
 	{
@@ -1937,7 +2033,7 @@ static void logPlayer2Prompt()
 }
 
 bool player2PromptKnown() {
-	return p2PromptTextures[0] != 0 || (activeProfile != nullptr && activeProfile->gunRam.floats && vmPlayersKnown);
+	return p2PromptTextures[0] != 0 || (activeProfile != nullptr && (activeProfile->gunRam.floats || activeProfile->gunRam.deathCrimson) && vmPlayersKnown);
 }
 
 // A 3D polygon with some of its corners at the 2D plane's W (a game whose near plane is

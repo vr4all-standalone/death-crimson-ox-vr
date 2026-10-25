@@ -803,13 +803,18 @@ std::vector<GunChoice> gunChoices()
 	if (!selectableGuns())
 		return { { (int)config::VrGun, config::VrGameHands && handsModel() != nullptr ? "The game's own" : "Arcade gun", true, true } };
 	// (with the game's own models off the pistol isn't made: the row passes it)
-	std::vector<GunChoice> choices {
-		{ 1, "In-game pistol", config::VrGameHands && gunModel(GunKind::Pistol) != nullptr, gunComplete(GunKind::Pistol) },
-	};
+    std::vector<GunChoice> choices;
+    // Offer a generated pistol only when the running game has a verified source.
+    // Death Crimson currently uses the credited Arcade/Zapper and user models.
+    if (gameModelSource() != nullptr)
+        choices.push_back({ 1, "In-game pistol", config::VrGameHands && gunModel(GunKind::Pistol) != nullptr, gunComplete(GunKind::Pistol) });
 	// the folder guns, whatever vr.GameHands says: the bundled ones first (a skipped one isn't made)
 	refreshOwn();
 	for (size_t i = 0; i < ownGuns.size(); i++)
 		choices.push_back({ OwnGuns, ownGuns[i]->name.c_str(), ownGuns[i]->valid, true, ownGuns[i]->file.stem.c_str() });
+	// The menu always needs a selectable row, even when no model files are installed.
+	if (choices.empty())
+		choices.push_back({ 1, "Arcade gun", true, true });
 	return choices;
 }
 

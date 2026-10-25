@@ -139,8 +139,8 @@ glm::vec3 originPos;
 glm::quat originRot { 1, 0, 0, 0 };
 
 // The light guns. Player 1's is in the hand whose trigger was pulled last; once player 2
-// joins (vr.DualWield: player 2's Start), player 1's is in player 1's hand (p1Hand(): the right,
-// or with vr.P1Hand left the left) and player 2's in the other: dual wielding.
+// joins (vr.DualWield: the assigned P2 Start), each player uses the two-player assignment
+// (p1Hand(): left by default). The single gun follows either trigger independently.
 struct Gun
 {
 	int player;
@@ -187,6 +187,8 @@ struct Gun
 };
 Gun guns[2] { { 0 }, { 1, Left } };
 bool dualWield;
+// Release latches belong to physical controllers, including the inactive hand in solo play.
+bool triggerReleaseWait[2];
 XrTime dualSince;
 bool p2StartWas, recenterWas, laserWas, menuWas;
 // The VR menu (the settings menu, xr_menu.h). Open, the emulator is held stopped: frame() draws
@@ -387,7 +389,7 @@ bool initActions()
 	if (!createAction(aimAction, "aim", "Aim", XR_ACTION_TYPE_POSE_INPUT, true)
 			|| !createAction(handAction, "hand", "Hand (holds the gun)", XR_ACTION_TYPE_POSE_INPUT, true)
 			|| !createAction(triggerAction, "trigger", "Fire", XR_ACTION_TYPE_FLOAT_INPUT, true)
-			|| !createAction(startAction, "start", "Start (left: player 2 joins)", XR_ACTION_TYPE_BOOLEAN_INPUT, true)
+			|| !createAction(startAction, "start", "Start (assigned P2 hand: join)", XR_ACTION_TYPE_BOOLEAN_INPUT, true)
 			|| !createAction(skipAction, "skip", "Reload (the gun's B)", XR_ACTION_TYPE_BOOLEAN_INPUT, true)
 			|| !createAction(menuAction, "menu", "Settings menu", XR_ACTION_TYPE_BOOLEAN_INPUT)
 			|| !createAction(recenterAction, "recenter", "Recenter", XR_ACTION_TYPE_BOOLEAN_INPUT)
@@ -396,15 +398,13 @@ bool initActions()
 			|| !createAction(stickAction, "stick", "Menus (D-pad), world size", XR_ACTION_TYPE_VECTOR2F_INPUT)
 			|| !createAction(gripAction, "grip", "Rack the slide; hold for world size", XR_ACTION_TYPE_FLOAT_INPUT, true))
 		return false;
-	// Either trigger fires; shooting away from the screen reloads. A: player 1's Start. X: the
-	// left Start, which lets player 2 join (vr.DualWield) and is then player 2's Start. B and Y:
-	// the gun's B (the cabinet's second button, Confidential Mission's reload), B player 1's,
-	// Y player 2's once player 2 is in (before that, either is player 1's). The menu button on
-	// the left: the settings menu. The left thumbstick click recenters (held: the frame ring),
-	// the right one turns the laser off or on (kept). Thumbstick: the gun's D-pad (menus); with
-	// a grip held, up/down sizes the world. The other hand's grip racks the game pistol's slide.
-	// vr.P1Hand left (the menu's Hands) swaps the players, not the bindings: X player 1's Start, Y player
-	// 1's B, A player 2's Start (it lets player 2 join), B player 2's B (updateLightgun).
+	// Either trigger fires in solo play; pulling away from the screen reloads. Each hand
+	// has Start and the cabinet's second button (B/Y), mapped to its assigned player in
+	// dual play. Before P2 joins either reload button belongs to P1. The left menu button
+	// opens settings, the left stick click recenters (held: frame ring), the right toggles
+	// the laser. The stick is the game's D-pad; with grip held, up/down sizes the world.
+	// vr.SwapP1P2 (on by default) names X/Y for P1, A/B for P2; off reverses the
+	// player assignment, never the physical bindings or solo trigger switching (updateLightgun).
 	auto suggest = [](const char *profile, std::initializer_list<std::pair<XrAction, const char *>> list) {
 		std::vector<XrActionSuggestedBinding> bindings;
 		for (const auto& [action, where] : list)
@@ -705,7 +705,7 @@ bool init()
 #endif
 	createInfo.enabledExtensionCount = (u32)extensions.size();
 	createInfo.enabledExtensionNames = extensions.data();
-	strcpy(createInfo.applicationInfo.applicationName, "Lupin the Third VR");
+	strcpy(createInfo.applicationInfo.applicationName, "Death Crimson OX VR");
 	createInfo.applicationInfo.applicationVersion = 1;
 	strcpy(createInfo.applicationInfo.engineName, "Flycast");
 	createInfo.applicationInfo.engineVersion = 1;
@@ -2024,6 +2024,28 @@ void updateMenu(XrTime time, bool menuEdge, bool skip, bool skipEdge)
 	}
 }
 
+// Reassigning a player must not turn an already-held control into a new shot/reload.
+// Keep the player's native state, ammunition history and shot count with that player.
+void suppressGunInput(Gun& g)
+{
+	triggerReleaseWait[g.hand] = true;
+	g.triggerWas = g.triggerWait = true;
+	g.pullAt = g.heldAt = 0;
+	g.offArmed = g.freshPull = false;
+	g.reloadAt = 0;
+	g.reloadButtonWas = true;
+	g.shotsDue = g.autosDue = g.clicksDue = 0;
+}
+
+void swapGunHands()
+{
+	std::swap(guns[0].hand, guns[1].hand);
+	// A controller held down is the same gesture after its player assignment changes.
+	std::swap(guns[0].pointedDown, guns[1].pointedDown);
+	for (Gun& g : guns)
+		suppressGunInput(g);
+}
+
 void updateLightgun(XrTime time)
 {
 	for (Gun& g : guns)
@@ -2034,8 +2056,9 @@ void updateLightgun(XrTime time)
 		if (dualWield)
 			lightgunSet(1, OffScreen, OffScreen, 0);
 		dualWield = false;
-		guns[1] = Gun { 1, Left };
-		guns[0].triggerWas = true;
+		guns[1] = Gun { 1, 1 - guns[0].hand };
+		for (Gun& g : guns)
+			suppressGunInput(g);
 		slide.held = false;
 		p2StartWas = true;	// a Start of player 2's still held doesn't join at once
 		// controllers in both hands again, with the labels (a How to play left on ends, with its line)
@@ -2194,27 +2217,31 @@ void updateLightgun(XrTime time)
 	float pulls[2];
 	for (int hand : { Left, Right })
 		pulls[hand] = tracked[hand] ? floatAction(triggerAction, hand) : 0.f;
-	// vr.P1Hand (the menu's Hands, p1Hand()): each controller's Start and B are its own player's, player
-	// 1's on the right (the default) or the left. The left Start's hold for the menu (menuByHold) stays
-	// the left's. A held from closing the VR menu is no Start until let go (startSwallow): the right's.
+	// The two-player assignment also names each hand's Start/reload buttons. With no join
+	// path (one tracked controller, disabled, online, unsupported game), either Start starts P1.
+	// The left Start's menu hold and the right A swallowed after the menu stay physical.
 	const int hand1 = p1Hand(), hand2 = 1 - hand1;
 	const bool rightStart = boolAction(startAction, Right) && !startSwallow;
-	const bool p1Start = hand1 == Right ? rightStart : leftStart;
+	const bool canJoin = config::VrDualWield && !config::GGPOEnable && player2PromptKnown() && tracked[Left] && tracked[Right];
+	const bool assignedP1Start = hand1 == Right ? rightStart : leftStart;
+	const bool p1Start = !dualWield && !canJoin ? leftStart || rightStart : assignedP1Start;
 	const bool p2Start = hand1 == Right ? leftStart : rightStart;
-	// Joining takes both controllers (with one, player 2's Start does nothing) and a game
+	// Joining takes both controllers (with one, either Start belongs to P1) and a game
 	// that shows when player 2 is out again (its profile knows the prompt). Not online
 	// (GGPO): player 2 is the other player there and only this side's player 1 is sent, so
-	// there player 2's Start does nothing.
-	const bool canJoin = config::VrDualWield && !config::GGPOEnable && player2PromptKnown() && tracked[Left] && tracked[Right];
+	// there either Start belongs to P1 until dual play is available.
 	if (canJoin && p2Start && !p2StartWas && !dualWield)
 	{
 		dualWield = true;
 		dualSince = time;
-		guns[0].hand = hand1;
+		if (guns[0].hand != hand1)
+			swapGunHands();
+		const bool p2Down = guns[1].pointedDown;
 		guns[1] = Gun { 1, hand2 };
-		// a trigger already held doesn't fire: it waits to be let go
-		guns[1].triggerWas = true;
-		guns[1].triggerWait = true;
+		guns[1].pointedDown = p2Down;
+		// Joining can move both guns: neither held trigger becomes a fresh shot.
+		for (Gun& g : guns)
+			suppressGunInput(g);
 		slide.held = false;
 		haptic(hand2, 0.05f, 0.6f);
 		NOTICE_LOG(INPUT, "XR: player 2 joins: a gun in each hand");
@@ -2225,6 +2252,8 @@ void updateLightgun(XrTime time)
 			|| ((time - dualSince) > 4'000'000'000LL && player2Prompting())))
 	{
 		dualWield = false;
+		for (Gun& g : guns)
+			suppressGunInput(g);
 		lightgunSet(1, OffScreen, OffScreen, 0);
 		NOTICE_LOG(INPUT, "XR: player 2 is out: one gun again");
 		noteHolds("player 2 out");
@@ -2233,19 +2262,23 @@ void updateLightgun(XrTime time)
 	// each player keeping theirs and their game; a trigger held through it waits to be let go.
 	if (dualWield && guns[0].hand != hand1)
 	{
-		// Downward reloads latch per controller: a hand held down through the menu is no new gesture.
-		std::swap(guns[0].pointedDown, guns[1].pointedDown);
-		for (Gun& g : guns)
-		{
-			g.hand = 1 - g.hand;
-			g.triggerWas = g.triggerWait = true;
-			g.pullAt = 0;
-			g.offArmed = false;
-		}
+		swapGunHands();
 		NOTICE_LOG(INPUT, "XR: the guns swap hands: player 1's in the %s", hand1 == Right ? "right" : "left");
 	}
-	// Player 2 joins as at the cabinet: with player 2's Start (vr.DualWield; the left controller's, the
-	// right's with vr.P1Hand left), and that hand gets player 2's gun (above). Out again once the game
+	// A player latch may clear on its released controller while the other controller is
+	// still held. Filter each physical trigger before solo transfer or either gun sees it.
+	// Losing tracking is not a release: observe a tracked pull below the release threshold.
+	for (int hand : { Left, Right })
+		if (triggerReleaseWait[hand])
+		{
+			if (tracked[hand] && pulls[hand] <= 0.35f)
+				triggerReleaseWait[hand] = false;
+			else
+				pulls[hand] = 0.f;
+		}
+
+	// Player 2 joins as at the cabinet: with the assigned P2 Start (vr.DualWield; right by default),
+	// and that hand gets player 2's gun (above). Out again once the game
 	// asks for player 2 in its corner again (lost, or never got in), after a few seconds to let the join land.
 	Gun& gun = guns[0];
 	if (!dualWield)
@@ -2255,7 +2288,10 @@ void updateLightgun(XrTime time)
 		const int otherHand = 1 - gun.hand;
 		if (!gun.triggerWas && ((tracked[otherHand] && !tracked[gun.hand]) || (pulls[otherHand] > 0.6f && pulls[gun.hand] < 0.35f)))
 		{
+			std::swap(gun.pointedDown, guns[1].pointedDown);
+			gun.offArmed = false;
 			gun.hand = otherHand;
+			guns[1].hand = 1 - otherHand;
 			NOTICE_LOG(INPUT, "XR: the gun is in the %s hand", gun.hand == Right ? "right" : "left");
 			noteHolds("gun moves");
 		}
@@ -2291,6 +2327,8 @@ void updateLightgun(XrTime time)
 		// above (player 1's controller untracked then, the other tracked)
 		if (!dualWield && tracked[hand1] && guns[0].hand != hand1)
 		{
+			std::swap(guns[0].pointedDown, guns[1].pointedDown);
+			guns[1].hand = guns[0].hand;
 			guns[0].hand = hand1;
 			NOTICE_LOG(INPUT, "XR: the gun is in the %s hand", hand1 == Right ? "right" : "left");
 		}
@@ -2784,9 +2822,7 @@ Holds holds(int hand)
 
 int p1Hand()
 {
-	std::string hand = config::VrP1Hand.get();
-	std::transform(hand.begin(), hand.end(), hand.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-	return hand == "left" ? Left : Right;
+	return config::VrSwapP1P2 ? Left : Right;
 }
 
 int hapticsLevel()
@@ -2850,6 +2886,7 @@ void term()
 	originSet = recenterRequested = false;
 	guns[0] = Gun { 0 };
 	guns[1] = Gun { 1, Left };
+	triggerReleaseWait[Left] = triggerReleaseWait[Right] = true;
 	dualWield = p2StartWas = recenterWas = laserWas = menuWas = p1StartWas = false;
 	skipWas = skipSwallow = false;
 	// (what the hands hold stays, p1Armed and menuHowToPlay: player 2's gun went without a word)
@@ -2947,7 +2984,7 @@ bool frame()
 	const bool cmGuns = source != nullptr && source->kind == hands::Source::CmGuns;
 	const bool lupinGun = source != nullptr && source->kind == hands::Source::LupinGun;
 	const bool gunModels = cmGuns || lupinGun;
-	const char *title = lupinGun ? "LUPIN THE THIRD VR" : cmGuns ? "CONFIDENTIAL MISSION VR" : staff ? "THE MAZE OF THE KINGS VR" : "THE HOUSE OF THE DEAD 2 VR";
+	const char *title = "DEATH CRIMSON OX VR";
 	// CM VR 1.2: Confidential Mission's panels in its start screen's colours (VR4All's: the panel, its
 	// line, violet, cream, muted grey, lime)
 	const glm::vec3 violet(169 / 255.f, 155 / 255.f, 1.f), cream(248 / 255.f, 245 / 255.f, 239 / 255.f), muted(155 / 255.f, 165 / 255.f, 180 / 255.f);

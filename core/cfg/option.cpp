@@ -127,7 +127,7 @@ Option<float> VrHandScale("vr.HandScale", 1.f);	// their size, times the ripped 
 Option<bool> VrSlideReload("vr.SlideReload", true);	// with them, the other hand racks the slide to reload
 Option<bool> VrStaffHand("vr.StaffHand", false);	// the hero's glove around his staff (The Maze of the Kings)
 Option<int> VrDebugShots("vr.DebugShots", 0);	// PC test aid: a screenshot every N seconds of game time (0: off)
-Option<bool> VrDualWield("vr.DualWield", true);	// the left controller's Start: player 2 joins, a gun in each hand
+Option<bool> VrDualWield("vr.DualWield", true);	// the assigned P2 controller's Start joins, a gun in each hand
 Option<bool> VrHideP2Prompt("vr.HideP2Prompt", true);	// no "PRESS START BUTTON" for player 2 floating in the room
 Option<bool> VrHandsPrep("vr.HandsPrep", false);	// PC: with no hands model, run the game to its game over scene for one (the headset always does)
 Option<int> VrHandsCaptureLimit("vr.HandsCaptureLimit", 0);	// PC test aid: the gun run merges at most this many captures of a gun (the first ones; 0: all)
@@ -142,7 +142,7 @@ Option<int> VrGun("vr.Gun", 1);	// the gun drawn: 1 the in-game pistol, 4 (and o
 Option<std::string> VrGunFile("vr.GunFile", "");	// with vr.Gun 4: the player's own gun, its file name in guns/ without .glb (the VR menu)
 Option<int> VrGunAngle("vr.GunAngle", 0);	// the gun tilted in the hand about its grip, degrees, + the muzzle up; read as -30 to 30 (the VR menu's Gun angle)
 Option<int> VrReload("vr.Reload", 0);	// 0 reload by shooting away from the screen; 1 also by pointing away from it, once each time (the VR menu's Reload)
-Option<std::string> VrP1Hand("vr.P1Hand", "right");	// player 1's controller: "right" (its Start, B and, with two players, gun; player 2's the left), or "left" the other way round; any case, anything else reads as right (the VR menu's Hands)
+Option<bool> VrSwapP1P2("vr.SwapP1P2", true); // two-player assignment only: on P1 left/P2 right, off P1 right/P2 left; solo follows either trigger
 Option<bool> CustomTextures("rend.CustomTextures");
 Option<bool> PreloadCustomTextures("rend.PreloadCustomTextures");
 Option<bool> DumpTextures("rend.DumpTextures");

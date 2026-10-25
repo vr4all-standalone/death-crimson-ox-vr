@@ -4,7 +4,7 @@
 	The emulator keeps producing frames at the game's own rate. The render thread paces
 	itself on the headset instead (xrWaitFrame), lets those frames through, and draws the
 	latest one once per eye with the reprojection from rend/vr_reproject.h, so head
-	movement is tracked at the display rate. The right controller is the light gun.
+	movement is tracked at the display rate. In solo play either trigger takes the light gun.
 
 	Copyright 2026 mikermak. This file is part of Flycast and is distributed under the GNU GPL v2 or later.
 */
@@ -64,8 +64,9 @@ void quitToStart();
 // nothing instead, until play resumes. Haptics go to the gun's hand, so this is where a gun is drawn.
 // Render thread.
 Holds holds(int hand);
-// Player 1's controller (vr.P1Hand, the menu's Hands): 1 the right (the default), 0 the left. Its Start
-// and B are player 1's and, with two players, its hand holds player 1's gun; the other's are player 2's.
+// Two-player assignment (vr.SwapP1P2, the menu's Swap P1/P2): 0 left (enabled by default),
+// 1 right (disabled). Its Start/reload belong to P1 and the other's Start joins P2. When joining
+// is unavailable either Start starts P1. The single gun always follows either trigger, independently.
 int p1Hand();
 // The menu's How to play (xr_menu.h) on or off: while on, both hands hold their controllers with the
 // labels, as at the start (the guns leave the hands). The menu closing, however it closes, turns it
@@ -89,7 +90,7 @@ inline void applyPause() {}
 inline void recenter() {}
 inline void quitToStart() {}
 inline Holds holds(int) { return Holds::Gun; }
-inline int p1Hand() { return 1; }
+inline int p1Hand() { return 0; }
 inline void setHowToPlay(bool, const char *) {}
 inline bool howToPlayOn() { return false; }
 inline void sampleKnock(int) {}

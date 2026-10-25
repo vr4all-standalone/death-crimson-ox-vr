@@ -34,11 +34,10 @@ struct Label
 // down, the stick's (above them) last: "<button> - <what it does>", the user's words (1.2) on Quest
 // Touch, the same jobs under each PC controller's own button names. The built-in shape is a Quest
 // controller's, so a PC controller's button points at the place doing the same job: Start at A (X
-// on the left), the reload at B (Y), the menu at the menu button. Before player 2 joins, the left
-// trigger shoots for player 1 (the one gun goes to the hand that pulls); the label still says P2,
-// the user's text. With vr.P1Hand left (the menu's Hands) the same buttons name the other player
-// (KindsP1Left): player 1's on the left, player 2's on the right. Roboto Bold, the panels' font, has no triple bar (U+2261): Touch's menu button
-// says "Menu".
+// on the left), reload at B (Y), menu at the menu button. The two-player assignment names each
+// player's Start/reload and the P2 Start joins. Solo play always takes the gun with either trigger;
+// the trigger labels say so. With vr.SwapP1P2 on (default), P1 is left and P2 right (KindsP1Left).
+// Roboto Bold has no triple bar (U+2261), so Touch's menu button says "Menu".
 struct Words
 {
 	const char *profile;
@@ -46,46 +45,46 @@ struct Words
 };
 const Words Kinds[] {
 	{ "/interaction_profiles/oculus/touch_controller", {
-		{ { controllers::Y, "Y - P2 Reload" }, { controllers::X, "X - P2 Start" }, { controllers::Menu, "Menu" },
-			{ controllers::Trigger, "Trigger - P2 Shoot" }, { controllers::Stick, "Stick - Recenter" } },
-		{ { controllers::B, "B - P1 Reload" }, { controllers::A, "A - P1 Start" }, { controllers::Trigger, "Trigger - P1 Shoot" },
+		{ { controllers::Y, "Y - P2 Reload" }, { controllers::X, "X - P2 Start / Join" }, { controllers::Menu, "Menu" },
+			{ controllers::Trigger, "Trigger - P2 Shoot (solo: either)" }, { controllers::Stick, "Stick - Recenter" } },
+		{ { controllers::B, "B - P1 Reload" }, { controllers::A, "A - P1 Start" }, { controllers::Trigger, "Trigger - P1 Shoot (solo: either)" },
 			{ controllers::Stick, "Stick - Laser" } } } },
 	{ "/interaction_profiles/valve/index_controller", {
-		{ { controllers::Y, "B - P2 Reload" }, { controllers::X, "A - P2 Start" }, { controllers::Menu, "Pad squeeze - Menu" },
-			{ controllers::Trigger, "Trigger - P2 Shoot" }, { controllers::Stick, "Stick - Recenter" } },
-		{ { controllers::B, "B - P1 Reload" }, { controllers::A, "A - P1 Start" }, { controllers::Trigger, "Trigger - P1 Shoot" },
+		{ { controllers::Y, "B - P2 Reload" }, { controllers::X, "A - P2 Start / Join" }, { controllers::Menu, "Pad squeeze - Menu" },
+			{ controllers::Trigger, "Trigger - P2 Shoot (solo: either)" }, { controllers::Stick, "Stick - Recenter" } },
+		{ { controllers::B, "B - P1 Reload" }, { controllers::A, "A - P1 Start" }, { controllers::Trigger, "Trigger - P1 Shoot (solo: either)" },
 			{ controllers::Stick, "Stick - Laser" } } } },
 	{ "/interaction_profiles/htc/vive_controller", {
-		{ { controllers::Y, "Pad click - P2 Reload" }, { controllers::X, "Menu - P2 Start (hold: Menu)" },
-			{ controllers::Trigger, "Trigger - P2 Shoot" } },
-		{ { controllers::B, "Pad click - P1 Reload" }, { controllers::A, "Menu - P1 Start" }, { controllers::Trigger, "Trigger - P1 Shoot" } } } },
+		{ { controllers::Y, "Pad click - P2 Reload" }, { controllers::X, "Menu - P2 Start / Join (hold: Menu)" },
+			{ controllers::Trigger, "Trigger - P2 Shoot (solo: either)" } },
+		{ { controllers::B, "Pad click - P1 Reload" }, { controllers::A, "Menu - P1 Start" }, { controllers::Trigger, "Trigger - P1 Shoot (solo: either)" } } } },
 	{ "/interaction_profiles/microsoft/motion_controller", {
-		{ { controllers::Y, "Pad click - P2 Reload" }, { controllers::X, "Menu - P2 Start (hold: Menu)" },
-			{ controllers::Trigger, "Trigger - P2 Shoot" }, { controllers::Stick, "Stick - Recenter" } },
-		{ { controllers::B, "Pad click - P1 Reload" }, { controllers::A, "Menu - P1 Start" }, { controllers::Trigger, "Trigger - P1 Shoot" },
+		{ { controllers::Y, "Pad click - P2 Reload" }, { controllers::X, "Menu - P2 Start / Join (hold: Menu)" },
+			{ controllers::Trigger, "Trigger - P2 Shoot (solo: either)" }, { controllers::Stick, "Stick - Recenter" } },
+		{ { controllers::B, "Pad click - P1 Reload" }, { controllers::A, "Menu - P1 Start" }, { controllers::Trigger, "Trigger - P1 Shoot (solo: either)" },
 			{ controllers::Stick, "Stick - Laser" } } } },
 };
-// vr.P1Hand left: each hand's buttons its own player's, P1 on the left and P2 on the right (the same
+// vr.SwapP1P2 on (default): each hand's buttons its own player's, P1 on the left and P2 on the right (the same
 // buttons and order as Kinds)
 const Words KindsP1Left[] {
 	{ "/interaction_profiles/oculus/touch_controller", {
 		{ { controllers::Y, "Y - P1 Reload" }, { controllers::X, "X - P1 Start" }, { controllers::Menu, "Menu" },
-			{ controllers::Trigger, "Trigger - P1 Shoot" }, { controllers::Stick, "Stick - Recenter" } },
-		{ { controllers::B, "B - P2 Reload" }, { controllers::A, "A - P2 Start" }, { controllers::Trigger, "Trigger - P2 Shoot" },
+			{ controllers::Trigger, "Trigger - P1 Shoot (solo: either)" }, { controllers::Stick, "Stick - Recenter" } },
+		{ { controllers::B, "B - P2 Reload" }, { controllers::A, "A - P2 Start / Join" }, { controllers::Trigger, "Trigger - P2 Shoot (solo: either)" },
 			{ controllers::Stick, "Stick - Laser" } } } },
 	{ "/interaction_profiles/valve/index_controller", {
 		{ { controllers::Y, "B - P1 Reload" }, { controllers::X, "A - P1 Start" }, { controllers::Menu, "Pad squeeze - Menu" },
-			{ controllers::Trigger, "Trigger - P1 Shoot" }, { controllers::Stick, "Stick - Recenter" } },
-		{ { controllers::B, "B - P2 Reload" }, { controllers::A, "A - P2 Start" }, { controllers::Trigger, "Trigger - P2 Shoot" },
+			{ controllers::Trigger, "Trigger - P1 Shoot (solo: either)" }, { controllers::Stick, "Stick - Recenter" } },
+		{ { controllers::B, "B - P2 Reload" }, { controllers::A, "A - P2 Start / Join" }, { controllers::Trigger, "Trigger - P2 Shoot (solo: either)" },
 			{ controllers::Stick, "Stick - Laser" } } } },
 	{ "/interaction_profiles/htc/vive_controller", {
 		{ { controllers::Y, "Pad click - P1 Reload" }, { controllers::X, "Menu - P1 Start (hold: Menu)" },
-			{ controllers::Trigger, "Trigger - P1 Shoot" } },
-		{ { controllers::B, "Pad click - P2 Reload" }, { controllers::A, "Menu - P2 Start" }, { controllers::Trigger, "Trigger - P2 Shoot" } } } },
+			{ controllers::Trigger, "Trigger - P1 Shoot (solo: either)" } },
+		{ { controllers::B, "Pad click - P2 Reload" }, { controllers::A, "Menu - P2 Start / Join" }, { controllers::Trigger, "Trigger - P2 Shoot (solo: either)" } } } },
 	{ "/interaction_profiles/microsoft/motion_controller", {
 		{ { controllers::Y, "Pad click - P1 Reload" }, { controllers::X, "Menu - P1 Start (hold: Menu)" },
-			{ controllers::Trigger, "Trigger - P1 Shoot" }, { controllers::Stick, "Stick - Recenter" } },
-		{ { controllers::B, "Pad click - P2 Reload" }, { controllers::A, "Menu - P2 Start" }, { controllers::Trigger, "Trigger - P2 Shoot" },
+			{ controllers::Trigger, "Trigger - P1 Shoot (solo: either)" }, { controllers::Stick, "Stick - Recenter" } },
+		{ { controllers::B, "Pad click - P2 Reload" }, { controllers::A, "Menu - P2 Start / Join" }, { controllers::Trigger, "Trigger - P2 Shoot (solo: either)" },
 			{ controllers::Stick, "Stick - Laser" } } } },
 };
 static_assert(std::size(KindsP1Left) == std::size(Kinds), "a P1-left set for each controller kind");
@@ -145,7 +144,7 @@ std::vector<Logged> logged[2];
 const Words *setLogged[2] {};
 const char *const HandName[2] { "left", "right" };
 
-// The words for a profile, by vr.P1Hand (p1Hand(): 0 left)
+// The words for a profile, by the two-player assignment (p1Hand(): 0 left)
 const Words& wordsFor(const char *profile)
 {
 	const Words (&kinds)[std::size(Kinds)] = p1Hand() == 0 ? KindsP1Left : Kinds;
