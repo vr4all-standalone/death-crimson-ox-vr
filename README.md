@@ -1,299 +1,206 @@
+<div align="center">
+
+<img src="hotd2-vr/assets/lupin-title.svg" alt="Lupin the Third VR — experimental Quest and PC VR port" width="100%" />
+
 # Lupin the Third VR
+### Sega NAOMI Light-Gun Adventure · Standalone Meta Quest & PC VR
 
-A standalone Quest and PC VR port in development for **Lupin the Third: The Shooting**
-(Sega NAOMI). It derives from Confidential Mission VR 1.2 and mikermak's
-[hotd2-vr](https://github.com/mikermak/hotd2-vr), itself a fork of
-[Flycast](https://github.com/flyinghead/flycast). It carries over the CM VR menus and features,
-using Lupin's own camera, game state and gun model.
+[![Release v1.0.0](https://img.shields.io/badge/Release-v1.0.0_Experimental-d44c65?style=for-the-badge)](../../releases)
+[![Quest and PC VR](https://img.shields.io/badge/Headset-Quest_%C2%B7_PC_VR_OpenXR-blue?style=for-the-badge)](#installation)
+[![Original game required](https://img.shields.io/badge/Your_Game-lupinshoo_GDS--0018-orange?style=for-the-badge)](#what-you-need)
 
-**Development build.** The port includes the final CM 1.2 menus, controller controls and labels,
-gun choices, first-run extraction, reload modes, haptics, dual wielding and independent setup.
-Lupin uses its own guarded camera, original hit-test lens, two-player calibration and native
-accepted-round state. [Validation evidence](hotd2-vr/notes/lupin-validation.md) separates
-simulator/build checks from the still-untested physical headset checks. Quest comfort,
-tracking, sustained performance and later-stage coverage need hands-on validation.
+**[⬇️ Quest APK](../../releases/latest/download/lupin-the-third-vr-quest.apk)** · **[🖥️ PC VR ZIP](../../releases/latest/download/lupin-the-third-vr-pcvr.zip)** · **[🎮 Controls](#controls)**
 
-The [approved design](docs/superpowers/specs/2026-10-24-lupin-vr-design.md) defines the target.
-[The implementation plan](docs/superpowers/plans/2026-10-24-lupin-vr.md) tracks the work, and
-[Lupin findings](hotd2-vr/notes/lupin-findings.md) records measured evidence and unresolved
-questions. Tests and addresses for another game are not evidence of Lupin support.
+**[🌐 VR4ALL — Standalone VR Mod Installer](https://github.com/vr4all-standalone/vr4all-standalone-vr-mod-installer)**
 
-Unofficial fan project, not affiliated with Sega, Namco, Meta or the Flycast project.
-**No game is included.** Use your own game files. Never commit or attach ROMs, discs, PICs,
-RAM dumps, screenshots, saves or generated game models.
+[Download the Lupin-enabled VR4ALL Windows build](../../releases/latest/download/VR4ALL-0.3.25-lupin-win-x64.exe)
 
-## Supported game files
+</div>
 
-Initial scope is the **original GDS-0018** revision, Flycast/MAME set `lupinshoo`.
-**Rev A (`lupinsho`, GDS-0018A) is not supported.** The supplied original disc was found
-under misleading Rev A names. Keep the originals untouched and prepare a separate correctly
-named copy; renaming a Rev A disc does not turn it into the original.
+---
 
-| File | Required layout |
-|---|---|
-| `lupinshoo.zip` | Original set, with `317-0325-jpn.pic` inside; keep it packed |
-| `lupinshoo/gds-0018.chd` | Original disc, in the `lupinshoo` folder beside the ZIP |
-| `naomi.zip` | Supported NAOMI BIOS beside the game ZIP, or a compatible BIOS entry inside the game ZIP |
+## Overview
 
-Original CHD header SHA1: `3b7d5dd917b9a2cc9b7b51aad22f8e75383c3301`.
-The Android setup checks the CHD header revision and ZIP entry metadata; it does not scan
-and verify every game byte. A complete original-named `gds-0018.cue` or `gds-0018.gdi` with
-all referenced nonempty tracks is also recognized. **Raw CUE/GDI boot is untested.**
-Use lowercase canonical set and disc paths, especially on case-sensitive storage.
+**Lupin the Third VR** brings **Lupin the Third: The Shooting** to a standalone Meta Quest
+or a PC VR headset. The original NAOMI game runs in Flycast; its scenes are reconstructed
+in stereo around you, and your tracked controllers become the light guns.
 
-## Quest development setup
+It carries over the menus and features of **[Confidential Mission VR](https://github.com/vr4all-standalone/confidential-mission-vr)**,
+using Lupin's own measured camera, aiming calibration, player state and extracted handgun.
+Both projects build on **[mikermak's VR fork of Flycast](https://github.com/mikermak/hotd2-vr)**,
+itself based on **[Flycast](https://github.com/flyinghead/flycast)**.
 
-Quest 3 is the primary target. Quest 3S, Quest 2, Quest Pro and PC VR compatibility are
-inherited targets, with physical headset validation pending for this Lupin port.
+> **No game included.** You need your own original **GDS-0018** game and NAOMI BIOS.
+> This is an unofficial fan project, not affiliated with Sega, Meta, the Lupin rights
+> holders or the Flycast project. No ROM, disc, PIC, game graphics or sound is supplied.
 
-The standalone package is `lupin-the-third-vr-quest.apk`, application ID
-`com.vrlightgunhub.lupin`, label **Lupin the Third VR**, base version `1.0.0`, versionCode
-`1`. The APK versionName also records the source commit: `1.0.0-g<commit>`.
-This app has its own settings and saves and can coexist with Confidential Mission VR.
-These are local builds; no publication or headset installation is part of this work.
+**Status: experimental.** Windows and Quest builds, simulator gameplay, aiming, menus
+and reload checks pass. **This Lupin port has not been tested on a physical headset.**
+Tracking, comfort, sustained performance and later stages still need hands-on validation.
 
-For an independently built development APK, put your files in the headset's shared Download
-folder using USB file transfer or your sideloading tool:
+## Key VR Features
 
-```text
-Download/
-    lupinshoo.zip
-    lupinshoo/
-        gds-0018.chd
-    naomi.zip
+- **Stereo 3D and tracked viewing.** Move and turn your head inside reconstructed scenes.
+  Wider view draws extra scenery while preserving the original game's hit-test lens.
+  HUD, subtitles and instructions sit on a panel in front of you.
+- **Your controller is the light gun.** Choose the handgun extracted from your own game,
+  the Arcade gun, the Zapper, or your own GLB. Gun angle adjusts from **−30° to +30°**.
+- **Feedback matches real rounds.** Recoil, muzzle flash and haptics happen when the game
+  fires. Empty magazines give a click without a firing kick. Haptics offers
+  **Off, Light, Medium and Strong**.
+- **Two players on one headset.** P2 joins with the other controller, with a separate gun,
+  magazine, lives and score. **Hands** assigns P1 to the left or right controller.
+- **Two reload modes.** Shoot away from the view, or just point away once per exit.
+  **B/Y** reload too. P1 has seven rounds; P2 has six.
+- **Empty hands in story scenes.** Guns, controllers and lasers disappear during
+  noninteractive movies and return when play resumes.
+- **A paused menu in the headset.** Choose guns, angle, reload, hands, laser, haptics,
+  world size, panel distance and wider view. Settings save immediately. How to play
+  shows labelled controllers, and Quit needs a second selection.
+- **A start screen that checks your files.** See READY or which file needs attention
+  before Play enables. Separate app identity, settings and saves let it coexist with CM.
+
+<a id="installation"></a>
+## Installation on Meta Quest
+
+Quest 3 is the primary target. Quest 3S, Quest 2, Quest Pro and PC VR are inherited
+compatibility targets; physical validation is pending for this Lupin port.
+
+<a id="what-you-need"></a>
+### What you need
+
+Use the **original GDS-0018**, MAME/Flycast set **`lupinshoo`**.
+**Rev A (`lupinsho`, `gds-0018a`) is not supported.** Renaming a Rev A disc does not turn
+it into the original revision.
+
+| File | Where it goes on the Quest |
+| :--- | :--- |
+| `lupinshoo.zip`, with `317-0325-jpn.pic` inside | `Download/lupinshoo.zip` — keep it packed |
+| Original `gds-0018.chd` | `Download/lupinshoo/gds-0018.chd` |
+| `naomi.zip` | `Download/naomi.zip`, unless a supported BIOS is already inside the game ZIP |
+
+The app checks the CHD header against the original revision. Its combined header SHA-1 is
+`3b7d5dd917b9a2cc9b7b51aad22f8e75383c3301`. These are structural/header checks, not a scan
+of every game byte. Keep the canonical lowercase paths.
+
+### 1. Enable developer mode
+
+Enable developer mode for your Quest in the Meta Horizon app and connect it to your PC by USB.
+Allow USB debugging on the headset. If you already use VR4ALL or SideQuest, this may be set up.
+
+### 2. Install with VR4ALL
+
+**[Get the Lupin-enabled VR4ALL Windows build](../../releases/latest/download/VR4ALL-0.3.25-lupin-win-x64.exe)**,
+open it, select **Lupin the Third VR** and provide your own three files above. If Lupin
+is missing from an older VR4ALL library, open this updated build.
+
+VR4ALL downloads the Quest APK, installs it, enables All files access and copies your
+files to the correct folders. It does not supply the game or BIOS.
+
+**Or by hand:** download the [Quest APK](../../releases/latest/download/lupin-the-third-vr-quest.apk)
+and install it with SideQuest, or ADB:
+
+```sh
+adb install -r lupin-the-third-vr-quest.apk
+adb shell appops set com.vrlightgunhub.lupin MANAGE_EXTERNAL_STORAGE allow
 ```
 
-Open **Lupin the Third VR** from Unknown sources. The VR4ALL-style setup panel provides
-**Allow** for All files access, **Look again**, individual file badges, and a **Play** button
-that stays disabled until its structural file checks pass. READY means the game files satisfy those structural checks. The app's private
-`files/games` and external `files/games` folders are checked too, without shared-storage
-access. File/adb launches go through the same game-selection checks.
+Copy your own files to the Download layout above. The app also recognizes complete
+original-named CUE/GDI sets with all tracks; **raw CUE/GDI boot remains untested**.
+The VR4ALL recipe uses CHD.
 
-The setup runs in its own `:setup` process. Relaunching Play ends only this app's old game
-process; Quit returns to the setup panel. The setup lifecycle has JVM checks; physical Quest relaunch/quit remains on the headset checklist.
+### 3. Play
 
-Settings use `/sdcard/Android/data/com.vrlightgunhub.lupin/files/emu.cfg`.
-Do not reuse another game's settings, generated gun cache or model data as evidence
-for this port. First start watches Lupin's attract demo to extract one complete train-guard handgun
-(24 strips, 86 triangles, 0.22 m barrel). Preparation reached 72 game seconds in about
-15 wall seconds on this development PC. Quest timing is unmeasured. B skips to the Arcade
-gun; the next launch retries. Valid caches are reused and corrupt/incomplete caches regenerate.
+Open **Lupin the Third VR** under **Unknown sources**. Use **Allow** if it needs file access,
+**Look again** to rescan, then **Play** when READY. Quit from VR returns to this screen.
 
-## PC VR development setup
+First launch watches the attract demo to prepare a handgun from your own game.
+**B skips** preparation for that launch and uses the Arcade gun; a later launch retries.
+Completed caches are reused and incomplete caches regenerate. The captured model is the
+train guards' handgun, not a claim to be Lupin's personal Walther. No extracted game model
+comes with the release.
 
-The portable archive is `lupin-the-third-vr-pcvr.zip`. Its top level contains
-`flycast.exe`, `emu.cfg`, `README.txt`, `LICENSE.txt`, and **Play Lupin the Third.cmd**.
-Licensed bundled models, when explicitly supplied for a build, add `CREDITS.txt` and
-`data/models/`. The archive contains no game files.
+Package: `com.vrlightgunhub.lupin`. Updates retain this app's settings and saves.
 
-Prepare a separate folder containing the build, then add your own files:
+## PC VR
 
-```text
-flycast.exe
-emu.cfg
-Play Lupin the Third.cmd
-roms/
-    lupinshoo.zip
-    lupinshoo/gds-0018.chd
-    naomi.zip
-```
+1. Download the [PC VR ZIP](../../releases/latest/download/lupin-the-third-vr-pcvr.zip) and unpack it.
+2. Add your own files beside `flycast.exe`:
 
-Connect the headset to the active OpenXR runtime, then run **Play Lupin the Third.cmd**.
-The launcher selects `roms\lupinshoo.zip` and sets the archive folder as the working directory
-so the portable `emu.cfg` belongs to this copy. The generated defaults are:
+   ```text
+   roms/
+       lupinshoo.zip
+       lupinshoo/gds-0018.chd
+       naomi.zip
+   ```
 
-```ini
-[config]
-pvr.rend = 0
-rend.NativeDepthInterpolation = yes
-vr.Xr = yes
-```
+3. Connect your headset to the active OpenXR runtime, such as SteamVR or Quest Link.
+4. Run **Play Lupin the Third.cmd**.
 
-This selects OpenGL, native depth interpolation and VR. Portable configuration and native standalone selection are checked; actual OpenXR headset use remains untested. There is no measured Lupin world-scale recommendation
-or headset performance result yet.
+The archive includes portable settings, licensed gun/controller models, credits and the
+software licence. It includes no game files. Physical PC VR headset use remains untested.
 
-## Controls and parity target
+<a id="controls"></a>
+## Controls
 
-Bindings match the final CM 1.2 controls; feedback and joining use Lupin's native game state.
-The default below assigns P1 to the right hand. **Hands** swaps P1/P2 Start buttons, dual-player
-reload buttons, gun hands and controller labels. Single-player shooting still follows either trigger:
+Default Quest Touch assignment:
 
-| Quest Touch input | Action |
-|---|---|
+| Input | Action |
+| :--- | :--- |
 | Right A / B | P1 Start / P1 Reload |
 | Left X / Y | P2 Start or join / P2 Reload |
-| Triggers | Shoot for the assigned player; either hand can fire P1 before P2 joins |
-| Left menu | Open or close paused VR settings |
+| Trigger | Shoot; either hand can hold P1's single gun before P2 joins |
+| Left Menu | Open/close the paused settings menu |
 | Left stick click | Recenter |
 | Right stick click | Toggle laser |
 | Grip + stick up/down | World size |
 | Grip + stick left/right | Gun size |
 | Stick | Game D-pad |
 
-The paused menu preserves this exact order: Resume, Recenter, Gun, Gun angle,
-Reload, Hands, Laser, Haptics, World size, Panel distance, Wider view, How to play, Quit. It preserves either-hand pointer selection, stick repeat, a live gun preview, three-second Quit
-confirmation, and simulation/audio pause with live head tracking.
+**Hands** swaps the players: P1 left uses X/Y, P2 right uses A/B. With two players active,
+changing Hands swaps their guns after the menu closes; a held trigger waits for release.
+Touch, Index, Vive and WMR have their own labels and bindings. How to play shows them,
+with Trigger above Stick where present.
 
-**Hands** offers P1 right/P2 left or P1 left/P2 right and saves immediately. With two players
-active, changing it swaps their guns after closing the menu; a held trigger must be released.
-How to play updates the labels for Touch, Index, Vive and WMR. Trigger labels sit above Stick
-labels where the controller has a stick. During noninteractive story scenes both hands are empty;
-the guns return for play, and How to play can still show the controls while paused.
+## The menu
 
-**Haptics** offers Off, Light, Medium (default) and Strong. Light keeps the original normal
-pulse, Medium lasts 1.6 times as long and Strong 2.4 times; Off keeps visual recoil and flash.
-Old numeric 0/1/2/3 and low/normal settings remain readable. New choices save as words.
+**Resume · Recenter · Gun · Gun angle · Reload · Hands · Laser · Haptics · World size ·
+Panel distance · Wider view · How to play · Quit**
 
-The two drawing and hit-test lenses remain separate when Wider view is enabled: the
-train is drawn at about 80 degrees while shots keep its original 40-degree hit test.
-The adapter inverts the cabinet's live calibration without writing EEPROM or breaking
-its off-screen reload sensor. P1 uses seven rounds and P2 six; accepted rounds drive recoil,
-flashes and haptics. No CM assault rifle or its pickup rules are added to Lupin.
+Either hand can point and select; stick navigation and repeat work too. Game and audio
+pause while head tracking stays live. Menu pointers remain visible with Laser off.
+Quit needs a second selection within three seconds.
 
-## User models
+## Bring your own models
 
-The inherited engine supports guns as `guns/<name>.glb` with a matching JSON sidecar, and
-controllers as `controllers/left.glb` / `right.glb` with matching sidecars. The same selection, override and fallback rules apply in Lupin. Only add files you
-have rights to use.
+Add GLBs and matching JSON sidecars in `Download/guns/` or `Download/controllers/` on Quest.
+PC uses `guns/` and `controllers/` beside the player or game files. User models override
+matching bundled files, and controller sides fall back independently.
+[Model format and development notes](hotd2-vr/notes/lupin-development.md#user-models).
 
-On Quest, user folders are beside the game ZIP, for example `Download/guns/` and
-`Download/controllers/`. On PC, folders beside `flycast.exe` take priority, followed by
-folders beside the game ZIP, followed by licensed bundled models in `data/models/`.
-A same-named user model overrides its bundled counterpart. Do not use a generated model
-from another game as Lupin's in-game pistol.
+## Known limits and testing
 
-A gun sidecar supplies its name, grip, muzzle, up direction and length in metres:
+- Physical tracking, comfort, controller feel, sustained frame rate and compatibility remain
+  untested. Include your headset and build version when reporting a problem.
+- Extreme head movement can reveal black beyond geometry drawn by the original game camera.
+- Later stages, raw CUE/GDI boot and mixed P1-active/P2-continue timing need more testing.
 
-```json
-{ "name": "My gun", "grip": [0, 0, 0], "muzzle": [0, 0.03, -0.18],
-  "up": [0, 1, 0], "length": 0.22 }
-```
+[Validation evidence](hotd2-vr/notes/lupin-validation.md) ·
+[Headset checklist](hotd2-vr/notes/lupin-vr-headset-checklist.md) ·
+[Measured Lupin research](hotd2-vr/notes/lupin-findings.md) ·
+[Build and development notes](hotd2-vr/notes/lupin-development.md)
 
-The bundled Zapper is 0.30 m long. The example above describes an arbitrary
-user gun, not a measured Lupin weapon. The inherited conversion helper is
-`hotd2-vr/tools/make-gun.py`; model credits and licensing remain required for distribution.
+## Credits and licence
 
-## Build and focused checks
+- **Flycast** by flyinghead and contributors. **mikermak's VR fork** supplies the original
+  VR rendering, tools and model infrastructure. Links are in the overview above.
+- **Confidential Mission VR** provides the standalone setup, menus and reusable gun features.
+  Lupin adapts them to its original revision, camera, calibration and native game state.
+- Individual model authors, licences and transformations appear in the release's **CREDITS.txt**.
+- This software build is distributed under **GNU GPL version 3**; see [LICENSE-RELEASE.txt](LICENSE-RELEASE.txt). Upstream source notices retain their GPL-2.0-or-later terms.
+  Upstream notices and history are preserved. Original game and character rights remain
+  with their owners. The project title graphic contains no game screenshot or character art.
 
-Windows builds use the inherited C++17 Flycast/OpenXR project. `hotd2-vr/build-win.cmd Release`
-builds the standalone Lupin Windows app (`RelWithDebInfo OFF` permits inherited-game regression tests); `hotd2-vr/build-quest.cmd` invokes the optimized arm64 `vr` Gradle variant.
-The Android SDK needs NDK `29.0.14206865` and CMake `3.22.1`. Set `ANDROID_HOME` and
-`JAVA_HOME` for your machine; the inherited scripts also look for a Microsoft JDK 17.
-The Gradle daemon toolchain file currently requests JDK 21, so that toolchain must be
-available as well. Keep writable build/config/save paths independent from other ports.
-
-The Quest APK build path is
-`shell/android-studio/flycast/build/outputs/apk/vr/flycast-vr.apk` before release packaging.
-Without the existing external release-signing configuration, Gradle uses the public debug
-key and warns. That is a test build, not a release.
-
-Focused checks:
-
-```powershell
-# Synthetic package checks: no builds, emulator, game data or signing keys.
-powershell -NoProfile -ExecutionPolicy Bypass -File hotd2-vr/package-release-tests.ps1
-
-# Plain Java setup/status tests through the Android project, when its toolchain is configured.
-cd shell/android-studio
-.\gradlew.bat :flycast:testDebugUnitTest
-```
-
-Additional isolated checks (set `VRLGH_GAMES` to a private original-set copy first):
-
-```powershell
-.\hotd2-vr\re\gun_input_test.cmd
-.\hotd2-vr\re\standalone_game_test.cmd
-.\hotd2-vr\lupin-accept.ps1 -Only feedback,empty
-.\hotd2-vr\lupin-aim.ps1
-.\hotd2-vr\lupin-aim.ps1 -Stock
-.\hotd2-vr\lupin-ui-accept.ps1
-.\hotd2-vr\lupin-settings-test.ps1
-.\hotd2-vr\lupin-cm-sync.ps1
-```
-
-The Java suites are `LupinFilesTest` and `LupinStartStatusTest`. They cover original layout,
-missing/mismatched files, PIC/BIOS metadata, embedded BIOS, nested/case variants, bounded
-scans, CUE/GDI tracks, setup status and explicit launch validation. Direct Java/JUnit runs
-also work without invoking native builds.
-
-Use the Lupin isolation harness and findings for game research. Runs must own only their
-launched PID, private writable paths and UDP port `27026`. Do not run a script that kills all
-Flycast processes or swaps another port's/shared ROM-folder models. The original reference
-checkout and the player's original ROM layout must remain untouched.
-
-## Release packaging and remaining gates
-
-`hotd2-vr/package-release.ps1` targets:
-
-- `dist/lupin-the-third-vr-quest.apk`
-- `dist/lupin-the-third-vr-pcvr.zip`
-
-It preserves the release policy: clean committed source, APK version commit resolving to
-HEAD, matching native commit attestations, release signing, APK package/label/versionCode/
-sole setup launcher checks, controller-model permission, exact portable archive contents,
-matching bundled model lists, GPL-3.0/cgltf notices and a credit entry for every model.
-Game discs/sets/keys, generated game models, rips, frame grabs and signing files are rejected.
-`-CheckOnly <archives>` performs content/licence/credit checks; it is not APK identity or
-signer verification. `-SkipBuild` uses existing builds but does not waive provenance checks.
-`-AllowDebugKey` marks test packaging and relaxes release signer/provenance requirements;
-it does not certify a release.
-
-Release signing stays outside this repository under the existing `VRLGH_SIGNING` configuration
-or the user's `.vrlightgunhub` folder. Preserve that private material; do not print, copy,
-commit or package it. No key creation, publication or headset installation is part of the
-current port work. A distributed GPL build needs its corresponding source commit.
-
-Build and simulator results are recorded in the validation report. Physical headset checks
-remain unchecked in [the headset checklist](hotd2-vr/notes/lupin-vr-headset-checklist.md).
-Complete those checks and later stages before advertising headset compatibility or performance.
-
-## Problems and research reports
-
-Use the [bug form](.github/ISSUE_TEMPLATE/bug_report.yml) with the build commit, headset/runtime,
-original revision, file format and reproduction steps. PC logs are `flycast.log` when enabled;
-Quest logs can be collected with `adb logcat -d -s flycast:*`. Keep game data, dumps,
-screenshots containing game artwork, generated game models and signing secrets out of issues
-and commits. Existing source-game findings are retained for attribution and engine reference;
-they do not establish Lupin behavior.
-
-## Credits and licences
-
-- **[hotd2-vr](https://github.com/mikermak/hotd2-vr) (The House of the Dead 2 VR) by
-  mikermak**: Lupin the Third VR derives from Confidential Mission VR and this fork. The VR mode, the panel the
-  start screen grew from and the tools are his. GPL-2.0-or-later.
-- [Flycast](https://github.com/flyinghead/flycast) by flyinghead and contributors, GPL-2.0
-  or later. This fork's code is too (see `LICENSE`); changed Flycast files carry a note,
-  and `git log master..` shows every change. Flycast's own readme:
-  [README.flycast.md](README.flycast.md).
-- The gun: ["Namco Arcade Gun"](https://sketchfab.com/3d-models/namco-arcade-gun-15fbd5b9add94a34b5c21746e3dd32be)
-  by [Martoscar](https://sketchfab.com/Martoscar), made for Age of Joy, licensed
-  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Changed: re-oriented and
-  moved into the controller's aim space, quantised, textures and materials dropped,
-  recoloured, converted to a C++ header (`core/rend/vr/gun_model.h`, CC BY 4.0). Since CC
-  BY 4.0 goes together with GPL-3.0 but not GPL-2.0, the builds, which include it (the Quest
-  app and the PC version), are distributed under **GPL-3.0**, which Flycast's "or later"
-  allows. The source is published with every release.
-- The bundled models, in the release builds only (not in this repository; `CREDITS.txt` in
-  the APK and the zip lists them with what was changed):
-  ["Namco Arcade Gun"](https://sketchfab.com/3d-models/namco-arcade-gun-15fbd5b9add94a34b5c21746e3dd32be)
-  by Martoscar, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/);
-  ["Nintendo Zapper"](https://sketchfab.com/3d-models/nintendo-zapper-e2a445cbf957439ab3a3f0c0408cd422)
-  by BIGDOGLOBAL (bdglobal), [CC BY-ND 4.0](https://creativecommons.org/licenses/by-nd/4.0/);
-  ["Meta Quest Left Controller"](https://sketchfab.com/3d-models/meta-quest-left-controller-c70d4a544ddf4b5d8155c2edaff6f9de)
-  and ["Meta Quest Right Controller"](https://sketchfab.com/3d-models/meta-quest-right-controller-5221accf9c7842eb9b2d4df2d2e5c545)
-  by declan02530, CC BY 4.0. They are files of their own next to the app, not part of its
-  code, each under its own licence.
-- [OpenXR loader](https://github.com/KhronosGroup/OpenXR-SDK) by Khronos, Apache-2.0.
-- [cgltf](https://github.com/jkuhlmann/cgltf) by Johannes Kuhlmann, MIT (reads the GLB models:
-  the bundled ones and your own). Its notice is in `LICENSE.txt`, in the APK (`assets/LICENSE.txt`)
-  and in the zip.
-- Roboto (Flycast's own copy, on the headset's panel) by Google, Apache-2.0.
-- [MediaPipe](https://github.com/google-ai-edge/mediapipe) by Google, Apache-2.0
-  (finger-gun tracker); [Capstone](https://www.capstone-engine.org/), BSD.
-- PC VR rendering in an OpenGL Core Profile: [nn10n10](https://github.com/nn10n10) (pull request
-  #1 to hotd2-vr).
-- The app's icon is drawn for it from plain shapes (`hotd2-vr/assets/make-icon.py`).
-- Inspired by [DR-89/time-crisis-vr](https://github.com/DR-89/time-crisis-vr).
-- The game and character names belong to their respective owners. Namco is a trademark of Bandai Namco, Zapper of Nintendo, Meta Quest of Meta.
-
-Unofficial fan project, not affiliated with Sega. No game is included.
+The first release binaries were verified from **`00706171d`**. The release tag identifies
+that corresponding source; the project page on `main` may have newer documentation.
+Game data and release signing material are never included.
