@@ -159,22 +159,9 @@ public abstract class BaseGLActivity extends Activity implements ActivityCompat.
         String launchConfig = intent != null ? intent.getStringExtra("hotd2vr.config") : null;
         if (launchConfig != null && !launchConfig.isEmpty())
             JNIdc.setConfigOverrides(launchConfig);
-        if (Intent.ACTION_VIEW.equals(intent.getAction())) {
-            Uri gameUri = intent.getData();
-            // Flush the intent to prevent multiple calls
-            getIntent().setData(null);
-            setIntent(null);
-            if (gameUri != null) {
-                if (storagePermissionGranted)
-                    JNIdc.setGameUri(gameUri.toString());
-                else
-                    pendingIntentUrl = gameUri.toString();
-            }
-        }
-        else if (getPackageName().equals(VR_APPLICATION_ID)) {
-            // hotd2-vr: Confidential Mission VR, started by its start screen with the game (or by
-            // adb). The Flycast menu can't be shown in the headset, so boot the game directly, or
-            // show the start screen when it can't be found (or read) yet.
+        if (getPackageName().equals(VR_APPLICATION_ID)) {
+            // Lupin's standalone entry always checks the original set, including ACTION_VIEW
+            // and adb launches. File intents must not bypass the setup panel's validation.
             String game = findVrGame();
             Log.i("flycast", game != null ? "VR build: booting " + game : "VR build: no game found, to the start screen");
             if (game == null) {
@@ -186,11 +173,23 @@ public abstract class BaseGLActivity extends Activity implements ActivityCompat.
             else
                 pendingIntentUrl = game;
         }
+        else if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction())) {
+            Uri gameUri = intent.getData();
+            // Flush the intent to prevent multiple calls
+            getIntent().setData(null);
+            setIntent(null);
+            if (gameUri != null) {
+                if (storagePermissionGranted)
+                    JNIdc.setGameUri(gameUri.toString());
+                else
+                    pendingIntentUrl = gameUri.toString();
+            }
+        }
         Log.i("flycast", "BaseGLActivity.onCreate done");
     }
 
     // hotd2-vr: the "vr" build type's applicationId (build.gradle.kts, androidComponents)
-    private static final String VR_APPLICATION_ID = "com.vrlightgunhub.confmiss";
+    private static final String VR_APPLICATION_ID = "com.vrlightgunhub.lupin";
 
 	// Called from native code
     public void showAlertDialog(String message)
@@ -215,18 +214,19 @@ public abstract class BaseGLActivity extends Activity implements ActivityCompat.
         });
     }
 
-    // hotd2-vr: the game to start: the one the start screen passed, else Confidential Mission when
-    // all its files are there (adb, netplay-quest.ps1); null: the start screen, to find them
+    // The setup panel and explicit file/adb launches share the same original-revision checks.
     private String findVrGame()
     {
         Intent intent = getIntent();
-        String picked = intent != null ? intent.getStringExtra(CmStartActivity.EXTRA_GAME) : null;
-        if (picked != null && new File(picked).isFile())
-            return picked;
-        CmFiles.Result cm = CmFiles.find(CmStartActivity.roots(this));
-        return cm.missing.isEmpty() ? cm.zip.getAbsolutePath() : null;
+        String picked = intent != null ? intent.getStringExtra(LupinStartActivity.EXTRA_GAME) : null;
+        if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction())) {
+            Uri uri = intent.getData();
+            if (uri == null || uri.getPath() == null || (uri.getScheme() != null && !"file".equals(uri.getScheme())))
+                return null;
+            picked = uri.getPath();
+        }
+        return LupinFiles.launchPath(picked != null ? new File(picked) : null, LupinStartActivity.roots(this));
     }
-
     // hotd2-vr: the start screen, when the game can't start yet
     private void showVrSetup()
     {
@@ -234,14 +234,14 @@ public abstract class BaseGLActivity extends Activity implements ActivityCompat.
     }
 
     /**
-     * hotd2-vr: back to Confidential Mission VR's start screen (CmStartActivity): it opens in the
+     * hotd2-vr: back to Lupin the Third VR's start screen (LupinStartActivity): it opens in the
      * headset's home (an immersive app opens a panel that way), and the game's activity finishes.
      * The VR menu's "Quit to the start screen" calls this through JNI, from any thread.
      */
     public static void quitToStart(Activity activity)
     {
         activity.runOnUiThread(() -> {
-            Intent panel = new Intent(activity.getApplicationContext(), CmStartActivity.class);
+            Intent panel = new Intent(activity.getApplicationContext(), LupinStartActivity.class);
             panel.setAction(Intent.ACTION_MAIN);
             panel.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             try {

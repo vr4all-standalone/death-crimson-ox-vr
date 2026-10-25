@@ -1,6 +1,6 @@
 """
-Draws the launcher icon of Confidential Mission VR (the Quest build, "vr" build type): the
-initials CM inside the four corner brackets of a target lock, with a small VR under them, from
+Draws the launcher icon of Lupin the Third VR (the Quest build, "vr" build type): the
+initials LT inside the four corner brackets of a target lock, with a small VR under them, from
 plain shapes only. No font, no game or company art (nothing of Sega's logo or the game's). Writes
 the five legacy densities into the vr source set, where they override the main source set's
 ic_launcher.png at the same sizes:
@@ -47,19 +47,17 @@ def letter_v(d, x0, y0, w, h, t):
                (cx + c, y1), (cx - c, y1)], fill=255)
 
 
-def letter_c(d, x0, y0, w, h, t):
-    """A C in the box (x0, y0, w, h) with strokes t wide: a ring open on the right."""
-    d.ellipse([x0, y0, x0 + w, y0 + h], fill=255)
-    d.ellipse([x0 + t, y0 + t, x0 + w - t, y0 + h - t], fill=0)
-    d.pieslice([x0 - t, y0 - t, x0 + w + t, y0 + h + t], -42, 42, fill=0)
-
-
-def letter_m(d, x0, y0, w, h, t):
-    """An M in the box (x0, y0, w, h) with strokes t wide: two stems and a V between them."""
+def letter_l(d, x0, y0, w, h, t):
+    """An L made from its stem and foot."""
     d.rectangle([x0, y0, x0 + t, y0 + h], fill=255)
-    d.rectangle([x0 + w - t, y0, x0 + w, y0 + h], fill=255)
-    letter_v(d, x0, y0, w, h * 0.68, t)
+    d.rectangle([x0, y0 + h - t, x0 + w, y0 + h], fill=255)
 
+
+def letter_t(d, x0, y0, w, h, t):
+    """A T made from its top bar and centred stem."""
+    d.rectangle([x0, y0, x0 + w, y0 + t], fill=255)
+    cx = x0 + w / 2
+    d.rectangle([cx - t / 2, y0, cx + t / 2, y0 + h], fill=255)
 
 def letter_r(d, x0, y0, w, h, t):
     """An R in the box (x0, y0, w, h) with strokes t wide: stem, round bowl, straight leg."""
@@ -96,14 +94,14 @@ def draw():
             d.rectangle(sorted_box(x, y, x + sx * arm, y + sy * t), fill=LOCK)
             d.rectangle(sorted_box(x, y, x + sx * t, y + sy * arm), fill=LOCK)
 
-    # CM, as big as the brackets allow, a little above the middle
+    # LT, as big as the brackets allow, a little above the middle
     mask = Image.new("L", (BIG, BIG), 0)
     md = ImageDraw.Draw(mask)
     lh, cw, mw, gap, stroke = u(0.27), u(0.22), u(0.25), u(0.035), u(0.065)
     x = BIG / 2 - (cw + gap + mw) / 2
     y = u(0.30)
-    letter_c(md, x, y, cw, lh, stroke)
-    letter_m(md, x + cw + gap, y, mw, lh, stroke)
+    letter_l(md, x, y, cw, lh, stroke)
+    letter_t(md, x + cw + gap, y, mw, lh, stroke)
     img.paste(Image.new("RGBA", (BIG, BIG), LETTERS), (0, 0), mask)
 
     # a small VR under it

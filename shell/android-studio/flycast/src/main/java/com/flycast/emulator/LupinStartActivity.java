@@ -1,4 +1,4 @@
-// hotd2-vr: added in 2026 for Confidential Mission VR.
+// hotd2-vr: added in 2026 for Lupin the Third VR.
 package com.flycast.emulator;
 
 import android.app.Activity;
@@ -39,18 +39,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * hotd2-vr: Confidential Mission VR's start screen, the app's entry in the headset's library: a 2D
+ * hotd2-vr: Lupin the Third VR's start screen, the app's entry in the headset's library: a 2D
  * panel, in a process of its own (":setup") so it can end a game still running in the app's main
- * process. It asks for "All files access", checks the game's three files (CmFiles) and names what's
- * missing and where it goes (CmStartStatus), and Play starts the game in VR (the immersive activity,
+ * process. It asks for "All files access", checks the game's three files (LupinFiles) and names what's
+ * missing and where it goes (LupinStartStatus), and Play starts the game in VR (the immersive activity,
  * the alias com.flycast.emulator.MainActivity). The game's quit to the start screen opens it again
  * (BaseGLActivity.quitToStart). It has the look of VR4All, the author's launcher app: its colours, a
  * dark page with a soft glow, rounded panels with thin borders. Built in code, no game art or text.
  */
-public class CmStartActivity extends Activity
+public class LupinStartActivity extends Activity
 {
     /** The game to start, for the VR activity (a path): the extra VrSetupActivity passed too. */
-    public static final String EXTRA_GAME = "hotd2vr.game";
+    public static final String EXTRA_GAME = "lupinvr.game";
 
     /** VR4All's colour tokens: the page (deck), panels, their borders (line), muted and cream text,
      *  the signal lime and the violet. */
@@ -67,7 +67,7 @@ public class CmStartActivity extends Activity
     private View badgeDot;
     private LinearLayout badge, marksRow, missingList, more;
     private Button allow, play;
-    private CmStartStatus status;
+    private LupinStartStatus status;
     /** The player opened or closed "Where to put your files": it then stays as they left it. */
     private boolean moreTouched;
 
@@ -111,7 +111,7 @@ public class CmStartActivity extends Activity
         accent.setBackground(bar);
         column.addView(accent, sized(MATCH, dp(3), 16));
 
-        column.addView(headline("Your mission.", CREAM), spaced(32));
+        column.addView(headline("Your next heist.", CREAM), spaced(32));
         column.addView(headline("Inside the headset.", VIOLET), spaced(2));
 
         column.addView(panel(), sized(MATCH, WRAP, 26));
@@ -133,7 +133,7 @@ public class CmStartActivity extends Activity
         setContentView(scroll);
 
         boolean access = canReadSharedStorage();
-        show(CmStartStatus.from(null, access), null, access);
+        show(LupinStartStatus.from(null, access), null, access);
     }
 
     @Override
@@ -143,17 +143,17 @@ public class CmStartActivity extends Activity
         refresh();
     }
 
-    /** The top bar: the CM tile, the app's name and its version. */
+    /** The top bar: the LT tile, the app's name and its version. */
     private View topBar()
     {
         LinearLayout bar = row();
-        TextView tile = text("CM", 17, DECK, 800);
+        TextView tile = text("LT", 17, DECK, 800);
         tile.setGravity(Gravity.CENTER);
         tile.setIncludeFontPadding(false);
         tile.setBackground(shape(VIOLET, 0, corners(13, 5)));
         bar.addView(tile, new LinearLayout.LayoutParams(dp(46), dp(46)));
 
-        TextView name = text("Confidential Mission VR", 21, CREAM, 700);
+        TextView name = text("Lupin the Third VR", 21, CREAM, 700);
         name.setLetterSpacing(-0.01f);
         LinearLayout.LayoutParams grow = new LinearLayout.LayoutParams(0, WRAP, 1);
         grow.leftMargin = dp(16);
@@ -250,7 +250,8 @@ public class CmStartActivity extends Activity
         body.addView(text("Your own copy of the game, the MAME set, in the headset's Download folder: with "
                 + "SideQuest (Manage files), or connect the headset to a PC with USB, allow access in the "
                 + "headset, and open Quest > Internal shared storage > Download. Nothing of the game comes "
-                + "with this app.", 17, MUTED, 500), spaced(8));
+                + "with this app. Use original GDS-0018: lupinshoo.zip, lupinshoo/gds-0018.chd, and naomi.zip "
+                + "beside the ZIP (or the BIOS inside it). Rev A, lupinsho/gds-0018a, is not supported.", 17, MUTED, 500), spaced(8));
         body.addView(foundAt = text("", 17, CREAM, 500), spaced(10));
         Button again = button("Look again", RAISED, CREAM, 0xFF252B37, 0xFF464D55);
         again.setOnClickListener(v -> refresh());
@@ -265,16 +266,16 @@ public class CmStartActivity extends Activity
         chevron.setRotation(open ? 90 : 0);
     }
 
-    private CmFiles.Result refresh()
+    private LupinFiles.Result refresh()
     {
         boolean access = canReadSharedStorage();
-        CmFiles.Result cm = CmFiles.find(roots(this));
-        show(CmStartStatus.from(cm, access), cm, access);
-        return cm;
+        LupinFiles.Result lupin = LupinFiles.find(roots(this));
+        show(LupinStartStatus.from(lupin, access), lupin, access);
+        return lupin;
     }
 
     /** The screen for a status: the badge, a mark per file, a line per missing file, Play, the steps. */
-    private void show(CmStartStatus s, CmFiles.Result cm, boolean access)
+    private void show(LupinStartStatus s, LupinFiles.Result lupin, boolean access)
     {
         status = s;
         int tone = s.ready ? LIME : VIOLET;
@@ -326,10 +327,10 @@ public class CmStartActivity extends Activity
             accessStatus.setTextColor(MUTED);
             allow.setVisibility(View.VISIBLE);
         }
-        if (cm != null && cm.zip != null)
+        if (lupin != null && lupin.zip != null)
         {
-            foundAt.setText("Found: " + shortPath(cm.zip)
-                    + (cm.disc != null ? ", the disc confmiss/" + cm.disc.getName() : ""));
+            foundAt.setText("Found: " + shortPath(lupin.zip)
+                    + (lupin.disc != null ? ", the disc lupinshoo/" + lupin.disc.getName() : ""));
             foundAt.setVisibility(View.VISIBLE);
         }
         else
@@ -339,10 +340,10 @@ public class CmStartActivity extends Activity
             setMore(!s.ready);
     }
 
-    /** A file's mark: "confmiss.zip ✓" (the tick in lime), or "naomi.zip missing" in violet. */
+    /** A file's mark: "lupinshoo.zip ✓" (the tick in lime), or "naomi.zip missing" in violet. */
     private TextView mark(String mark)
     {
-        boolean found = mark.endsWith(CmStartStatus.FOUND);
+        boolean found = mark.endsWith(LupinStartStatus.FOUND);
         SpannableString s = new SpannableString(mark);
         if (found)
             s.setSpan(new ForegroundColorSpan(LIME), mark.length() - 1, mark.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -356,7 +357,7 @@ public class CmStartActivity extends Activity
     /** "naomi.zip missing" in bold violet, then where it goes. */
     private TextView missingLine(String line)
     {
-        int cut = line.indexOf(CmStartStatus.MISSING) + CmStartStatus.MISSING.length();
+        int cut = line.indexOf(LupinStartStatus.MISSING) + LupinStartStatus.MISSING.length();
         SpannableString s = new SpannableString(line);
         s.setSpan(new ForegroundColorSpan(VIOLET), 0, cut, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         s.setSpan(new StyleSpan(Typeface.BOLD), 0, cut, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -378,7 +379,7 @@ public class CmStartActivity extends Activity
     private void play()
     {
         // the files as they are now (one may have gone since the screen was drawn)
-        CmFiles.Result cm = refresh();
+        LupinFiles.Result lupin = refresh();
         if (!status.ready)
             return;
         // A game may still be running in the app's own process (the app opened again from the
@@ -388,7 +389,7 @@ public class CmStartActivity extends Activity
         // the immersive activity, which starts in VR
         Intent intent = new Intent(Intent.ACTION_MAIN);
         intent.setComponent(new ComponentName(this, "com.flycast.emulator.MainActivity"));
-        intent.putExtra(EXTRA_GAME, cm.zip.getAbsolutePath());
+        intent.putExtra(EXTRA_GAME, lupin.zip.getAbsolutePath());
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
@@ -415,7 +416,7 @@ public class CmStartActivity extends Activity
     private String version()
     {
         try {
-            return CmStartStatus.shortVersion(getPackageManager().getPackageInfo(getPackageName(), 0).versionName);
+            return LupinStartStatus.shortVersion(getPackageManager().getPackageInfo(getPackageName(), 0).versionName);
         } catch (PackageManager.NameNotFoundException e) {
             return "";
         }
