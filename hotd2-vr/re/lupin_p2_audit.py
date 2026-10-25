@@ -32,19 +32,24 @@ for root in roots:
     box=[float(v['x'].min()),float(v['y'].min()),float(v['x'].max()),float(v['y'].max())]
     if not (w.min()>=.49 and w.max()<=.75 and box[0]>=437.5 and box[1]>=440.5 and box[2]<=617.5 and box[3]<=464.5):continue
     hit.append(dict(lst=poly.lst,index=poly.idx,box=box,width=box[2]-box[0],height=box[3]-box[1],glyph=(box[2]-box[0]>=8 and box[3]-box[1]>=8),w=float(w.mean()),uv=[float(v['u'].min()),float(v['v'].min()),float(v['u'].max()),float(v['v'].max())]))
-   records.append(dict(path=str(path),session=vals[0],players=[vals[1],vals[2]],life=[vals[3],vals[4]],eligible=vals[:3]==[1,1,0],count=len(hit),glyphcount=sum(h['glyph'] for h in hit),hits=hit))
+   mask_eligible=vals[:3]==[1,1,0]
+   eligible=mask_eligible and vals[4]==0
+   glyphcount=sum(h['glyph'] for h in hit)
+   # Keep geometry-only counts even for non-idle states: continue HUD can overlap.
+   records.append(dict(path=str(path),session=vals[0],players=[vals[1],vals[2]],life=[vals[3],vals[4]],player_mask_eligible=mask_eligible,eligible=eligible,count=len(hit),glyphcount=glyphcount,ungatedcount=len(hit),ungatedglyphcount=glyphcount,matchedglyphcount=glyphcount if eligible else 0,hits=hit))
   except (FileNotFoundError,ValueError,OSError):pass
 out=args.output
 out.parent.mkdir(parents=True,exist_ok=True)
 out.write_text(json.dumps(records,indent=2))
 from collections import Counter
-print('total passes',len(records),'eligible',sum(r['eligible'] for r in records))
+print('total passes',len(records),'player-mask eligible',sum(r['player_mask_eligible'] for r in records),'idle eligible',sum(r['eligible'] for r in records))
 print('eligible counts',Counter(r['count'] for r in records if r['eligible']))
 print('eligible glyph counts (min 8x8)',Counter(r['glyphcount'] for r in records if r['eligible']))
-for kind,pred in [('eligible prompt',lambda r:r['eligible'] and r['count']==6),('eligible absence',lambda r:r['eligible'] and r['count']==0),('eligible other',lambda r:r['eligible'] and r['count'] not in (0,6)),('active P2 collisions',lambda r:r['session']==1 and r['players'][1]==1 and r['count']>0),('P1 active P2 continue',lambda r:r['session']==1 and r['players'][0]==1 and r['life'][1]==2)]:
+for kind,pred in [('eligible prompt',lambda r:r['eligible'] and r['count']==6),('eligible absence',lambda r:r['eligible'] and r['count']==0),('eligible other',lambda r:r['eligible'] and r['count'] not in (0,6)),('active P2 collisions',lambda r:r['session']==1 and r['players'][1]==1 and r['count']>0),('P2 continue ungated glyph collisions',lambda r:r['life'][1]==2 and r['ungatedglyphcount']>0),('P1 active P2 continue',lambda r:r['session']==1 and r['players'][0]==1 and r['life'][1]==2)]:
  rows=[r for r in records if pred(r)];print('\n'+kind,len(rows))
  for r in rows[:12]:print(r['path'],'players',r['players'],'life',r['life'],'count',r['count'])
 glyphs=[h for r in records if r['eligible'] for h in r['hits'] if h['glyph']]
 print('eligible glyph sizes',Counter((h['width'],h['height']) for h in glyphs))
+print('P2 continue matched glyphs after state gates',sum(r['matchedglyphcount'] for r in records if r['life'][1]==2))
 print('active P2 min8 collisions',sum(r['session']==1 and r['players'][1]==1 and r['glyphcount']>0 for r in records))
 print('numeric evidence',out)

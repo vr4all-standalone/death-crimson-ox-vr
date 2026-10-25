@@ -1,4 +1,4 @@
-# Lupin prompt and model verification evidence
+﻿# Lupin prompt and model verification evidence
 
 Numeric observations only. Game RAM, render passes, textures and the extracted pistol remain private and ignored.
 
@@ -13,9 +13,9 @@ The original local disc revision uses shared atlas address `0x92d800`. At native
 
 Profile bounds are `{437.5,440.5,617.5,464.5}`; minimum quad size is 8x8, both scaled by framebuffer dimensions. Native W is 0.51724136. The renderer snaps this near HUD to the profile's 0.6 plane before suppression. The atlas packs glyphs at different UV coordinates in different scenes, so a fixed UV whitelist is unsuitable.
 
-Use only known player mask 1 (session/P1 active/P2 inactive), and disable trailing-rectangle suppression. This preserves waiting text and joined-P2 feedback on the shared atlas. Five P1-only captures include an additional 3x1 red polygon at 513,457 to 516,458, native W 0.5263158; minimum size rejects it.
+Use only known player mask 1 (session/P1 active/P2 inactive) and finite native P2 lifecycle `0` at `0xA4C74C`, and disable trailing-rectangle suppression. This preserves waiting text and joined-P2 feedback on the shared atlas. Five P1-only captures include an additional 3x1 red polygon at 513,457 to 516,458, native W 0.5263158; minimum size rejects it.
 
-The 2026-10-25 audit snapshot contains 318 passes: 211 P1-only, 210 with exactly six qualifying glyph quads and one with none. These split into 132 join and 78 coin messages. Texture+box alone overlaps feedback in 43 joined-P2 passes; all observed feedback overlaps fail the 8x8 minimum. Both-inactive waiting screens need the player-state gate. There are no P1-active/P2-continue captures, so that transition is not proven by this corpus. Counts grow as new private captures arrive.
+The 2026-10-25 audit snapshot contains 318 passes: 211 P1-only, 210 with exactly six qualifying glyph quads and one with none. These split into 132 join and 78 coin messages. Texture+box alone overlaps feedback in 43 joined-P2 passes; all observed feedback overlaps fail the 8x8 minimum. Both-inactive waiting screens need the player-state gate. All 210 prompt-present cases have P2 lifecycle `0`, so the idle guard preserves them. Two captured P2 lifecycle-`2` states each contain four glyphs matching the texture, bounds and 8x8 selector; the idle guard explicitly excludes those glyphs. There are no P1-active/P2-continue captures, so that mixed-state timing is not proven by this corpus. Counts grow as new private captures arrive.
 
 Private reproducible captures (paths relative to their respective `build-win/vrtest` roots):
 
@@ -29,8 +29,10 @@ Private reproducible captures (paths relative to their respective `build-win/vrt
 | Research clone | `state-rounds-original-v2/rip/pass0004.bin` | 106.036 s | players 1/1, lifecycle 1/1 | P2 feedback; retain |
 | Research clone | `aim-grid-original-ideal-rip-v3/rip/pass0008.bin` | 91.948 s | players 1/0, lifecycle 1/0 | Coin message extends beyond initial join-only bounds |
 | Research clone | `aim-grid-original-stock-rip-v2/rip/pass0026.bin` | see run log | players 1/0, lifecycle 1/0 | Join message plus 3x1 effect |
+| Research clone | `state-reload-original-v3/rip/pass0003.bin` | 116.191 s | players 0/0, lifecycle 2/2 | Four matching state-2 HUD glyphs; retain |
+| Research clone | `state-rounds-original-v1/rip/pass0005.bin` | 126.050 s | players 0/0, lifecycle 2/2 | Four matching state-2 HUD glyphs; retain |
 
-Audit with `re/lupin_p2_audit.py --capture-root <research-vrtest> --capture-root <clone-vrtest> --output <ignored-json>`. It reads the latest RAM dump at/before each pass. Float state offsets are session `0xa4c728`, players `0xa4c738`/`0xa4c73c`, lifecycle `0xa4c748`/`0xa4c74c`. Output contains state, quad bounds/UV/depth and counts only.
+Audit with `re/lupin_p2_audit.py --capture-root <research-vrtest> --capture-root <clone-vrtest> --output <ignored-json>`. It reads the latest RAM dump at/before each pass. Float state offsets are session `0xa4c728`, players `0xa4c738`/`0xa4c73c`, lifecycle `0xa4c748`/`0xa4c74c`. Output contains state, quad bounds/UV/depth and counts only. `player_mask_eligible` records the original active-player gate; `eligible` additionally requires P2 lifecycle `0`. `ungatedcount`/`ungatedglyphcount` preserve geometry-only overlaps even when state gates reject them, while `matchedglyphcount` applies both state gates.
 
 ## Model fixture and runtime recovery
 
@@ -72,3 +74,9 @@ The focused runtime regression then passed all three cases against the rebuilt r
 | `lp-cache-valid-pistol-real` | Complete final logged made-before without preparation; in-game pistol loaded with 2 textures and 258 vertices; `t004-valid-pistol.png` shows its dark barrel and brown grip at bottom-right |
 
 The incomplete-case `t005-rejected-arcade.png` visibly shows the real cyan Namco gun. The valid-pistol image uses the black boot room and the default low controller pose, so it is dark and partly cropped; a lit gameplay capture with the hand raised would show the model more clearly. Runtime exit was 0, original cache hash matched after restoration, the nested fixture restored the outer installed licensed set, and zero clone player processes remained. The localized native renderer change was left uncommitted for root's combined native commit.
+
+
+Native idle-guard readback confirmed `p2PromptIdleAddr` defaults to `0` and only Lupin sets `0xA4C74C`. Before hiding, the retained known-mask guard is followed by `vmCount(addr, 2, life) && life == 0`; the existing helper rejects nonfinite, negative and fractional float values using the IEEE exponent check as well as range/integrality checks. The two state-2 captures contain native-W 0.51724136 quads spanning 479,442 to 581,462 (three 30x20 quads and one 12x19 quad), so the added state gate protects real observed geometry rather than relying on an assumed UV distinction.
+
+
+The lifecycle-aware offline rerun covered 352 private passes: 233 eligible under both player-mask and idle-state gates, 232 with six prompt glyphs and one absent. Every one of the prior snapshot's 210 prompt-present paths remains eligible with six matched glyphs. The two lifecycle-2 captures retain `ungatedglyphcount=4` each and have `matchedglyphcount=0`; mixed P1-active/P2-continue cases remain zero. These checks used both research and clone capture roots without app launches or builds.
