@@ -257,6 +257,7 @@ struct GameProfile
 	u32 p2PromptTextures[4] {};
 	ScreenBox p2PromptBox { 352.f, 384.f, 640.f, 480.f };
 	glm::vec2 p2PromptMinSize { 0.f };
+	u32 p2PromptIdleAddr = 0;
 	// While the prompt shows, flat polygons on its line just after it go too (HOTD2's credit
 	// count after it): off for a game where nothing follows it there. See hidePlayer2Prompt.
 	bool p2HideTrailing = true;
@@ -634,6 +635,7 @@ static std::vector<GameProfile> makeProfiles()
 	p.p2PromptMinSize = { 8.f, 8.f };
 	p.p2HideTrailing = false;
 	p.p2PromptSinglePlayerOnly = true;
+	p.p2PromptIdleAddr = 0xA4C74C; // 0 out, 1 active, 2 continue: keep continue glyphs
 	p.analogOffscreenReload = true;
 	p.movieCutscenes = true;
 	p.noShotFlash = true; // no CRT/UI flash in sampled analog-gun bursts; retain movie/fade layers
@@ -1786,6 +1788,12 @@ static void hidePlayer2Prompt(rend_context& ctx, const RenderPass& pass, const R
 	if (activeProfile != nullptr && activeProfile->p2PromptSinglePlayerOnly
 			&& (!vmPlayersKnown.load() || vmPlayers.load() != 1))
 		return;
+	if (activeProfile != nullptr && activeProfile->p2PromptIdleAddr != 0)
+	{
+		u32 life = 0;
+		if (!vmCount(activeProfile->p2PromptIdleAddr, 2, life) || life != 0)
+			return;
+	}
 	// (not online: player 2 is a real player there, and on the guest it's the player's own)
 	const bool hide = config::VrHideP2Prompt && !config::GGPOEnable;
 	struct Box { float x0, y0, x1, y1; };
