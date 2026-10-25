@@ -11,6 +11,15 @@ $globalStops = @($ast.FindAll({ param($node)
     $node.Extent.Text -match '\bflycast\b'
 }, $true))
 if ($globalStops.Count) { $failures += 'Harness enumerates every Flycast process instead of owning only its launched PID.' }
+$suite = Join-Path $PSScriptRoot 'accept.ps1'
+$suiteAst = [Management.Automation.Language.Parser]::ParseFile($suite, [ref]$tokens, [ref]$parseErrors)
+if ($parseErrors.Count) { throw "Suite syntax errors: $parseErrors" }
+$suiteStops = @($suiteAst.FindAll({ param($node)
+    $node -is [Management.Automation.Language.CommandAst] -and
+    $node.GetCommandName() -eq 'Get-Process' -and
+    $node.Extent.Text -match '\bflycast\b'
+}, $true))
+if ($suiteStops.Count) { $failures += 'Inherited suite enumerates every Flycast process; it must delegate owned-PID cleanup to the harness.' }
 $port = @($ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Port' })
 if ($port.Count -ne 1) { $failures += 'Harness has no configurable private UDP port.' }
 $text = [IO.File]::ReadAllText($Harness)

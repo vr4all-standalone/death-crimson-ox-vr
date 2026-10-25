@@ -29,6 +29,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <array>
+#include "rend/vr/gun_calibration.h"
 
 namespace vr
 {
@@ -63,6 +65,9 @@ static bool plausible(float v, float lo, float hi) {
 	return std::isfinite(v) && std::abs(v) > lo && std::abs(v) < hi;
 }
 
+// A profile may expose its focal directly instead of a projection/viewport pair.
+static bool readProfileFocal(glm::vec2& focal);
+
 // The game's focal length in DC pixels, per axis: viewport scale times projection scale.
 static glm::vec2 readGameFocal()
 {
@@ -74,6 +79,9 @@ static glm::vec2 readGameFocal()
 		if (plausible(focal.x, 10.f, 20000.f) && plausible(focal.y, 10.f, 20000.f))
 			return focal;
 	}
+	glm::vec2 direct;
+	if (readProfileFocal(direct))
+		return direct;
 	return glm::vec2(config::VrFocal);
 }
 
@@ -189,6 +197,11 @@ struct CodePatch
 	u32 offset;			// RAM offset of a 16-bit word of code
 	u16 stock, patched;
 };
+struct CodeGuard
+{
+	u32 offset = 0;
+	u16 expected = 0;
+};
 struct Poke
 {
 	u32 offset;			// RAM offset of a 16-bit word, written every frame
@@ -203,6 +216,10 @@ struct GameProfile
 	const char *gameId = "";
 	// The projection and viewport matrices in RAM: the game's live focal length.
 	int projAddr = 0, viewportAddr = 0;
+	// Some render libraries keep the focal itself in pixels (Lupin), with no normalized
+	// projection matrix in RAM. Revision guards keep an unknown build from reading it.
+	u32 liveFocalAddr = 0;
+	CodeGuard focalGuards[4] {};
 	float fovScale = 1.f;
 	// Widening the game's own view: either the 16-bit angle literals its code builds its
 	// projection from (scaled by fovScale, see widenGameView)...
@@ -215,6 +232,12 @@ struct GameProfile
 	// else vr.Focal. And the stock framing of the 2D plane (0: vr.Focal).
 	u32 stockFocalAddr = 0;
 	bool stockFocalInverse = false;
+	// Original lens angle retained independently of a patched drawing projection.
+	struct StockLens {
+		u32 descriptors = 0, index = 0, width = 0;
+		u16 stride = 0, angleOffset = 0, count = 0;
+		CodeGuard guards[12] {};
+	} stockLens;
 	float focal = 0.f;
 	// Written every frame once the game's code is there (its fovPatch words stock or patched).
 	Poke pokes[12] {};
@@ -222,22 +245,26 @@ struct GameProfile
 	// see dropShotMarker.
 	u32 markerTextures[4] {};
 	float markerMinW = 0.85f, markerMaxW = 1.15f;
+	ScreenBox markerUvBoxes[4] {};
 	// Its marker and hit effects are drawn where its widened view puts the shot, not at the
 	// gun: its hit test keeps the stock view (stockFocalAddr) while it draws the wider one.
 	// See shotDrawnAt.
-	bool markerWidened = false;
+	bool markerWidened = false, markerBeforeSnap = false;
 	// It draws no shot flash: vr.DropShotFlash never applies, so a bright full-screen 2D quad
 	// just after a shot (its own fade, say) stays. See dropShotMarker.
 	bool noShotFlash = false;
 	// Player 2's prompt pictures and where they are: see hidePlayer2Prompt.
 	u32 p2PromptTextures[4] {};
 	ScreenBox p2PromptBox { 352.f, 384.f, 640.f, 480.f };
+	glm::vec2 p2PromptMinSize { 0.f };
 	// While the prompt shows, flat polygons on its line just after it go too (HOTD2's credit
 	// count after it): off for a game where nothing follows it there. See hidePlayer2Prompt.
 	bool p2HideTrailing = true;
 	// 2D layers near the 2D plane (see snapNear2D): from and up to these W, at W in multiples
 	// of this step; the W of the letterbox bars (0: the 2D plane's).
 	float snapMinW = 0.75f, snapMaxW = 1.05f, snapStep = 0.01f;
+	// Some libraries order sprites by a regular inverse-W grid rather than W.
+	bool snapInverseDepth = false;
 	float letterboxW = 0.f;
 	// Textures that make a polygon at the letterbox's W one of its bars whatever its colour
 	// (none: opaque black ones only). See hideLetterbox.
@@ -264,6 +291,11 @@ struct GameProfile
 	// The player's own model from the game, in a file of its own (hands_rip.h): the agent's
 	// hands and pistol, the hero's staff, or none (the arcade gun).
 	hands::Source model {};
+	// Reusable VR gun choices can be available before this game has a captured pistol.
+	bool gunMenu = false;
+	bool analogOffscreenReload = false, movieCutscenes = false, p2PromptSinglePlayerOnly = false;
+	u32 calibrationAddr = 0, calibrationMode = 0;
+	std::array<CodeGuard, 32> calibrationGuards {};
 	// Each player's gun in RAM, for the knocks in the hand (gunState): the first player's
 	// block, the step to the next player's, and the offsets in it of the rounds left, the
 	// magazine's size (a byte each) and the shots fired (16 bits). base 0: none. The assault
@@ -273,6 +305,10 @@ struct GameProfile
 	struct GunRam {
 		u32 base = 0, stride = 0; u8 ammo = 0, magazine = 0, shots = 0;
 		s16 weapon = -1; u8 rifleValue = 0; u32 playing = 0;
+		// Float-valued VM variables instead of the byte/u16 block (original Lupin).
+		bool floats = false; u32 session = 0, active = 0;
+		int shotWaitMs = 100;
+		CodeGuard guards[6] {};
 	} gunRam;
 };
 
@@ -391,6 +427,7 @@ static std::vector<GameProfile> makeProfiles()
 	// 0x0C24F8C0), viewport 0x0C24F798 (320, -240).
 	p = GameProfile();
 	p.gameId = " CONFIDENTIAL MISSION ---------";
+	p.gunMenu = true;
 	p.projAddr = 0x24F660;
 	p.viewportAddr = 0x24F798;
 	// Its camera keeps the field of view as a float, horizontal degrees, at 0x0C154EC8. Each
@@ -525,10 +562,134 @@ static std::vector<GameProfile> makeProfiles()
 	// it's held). 0.88 m, an AK's length (the model's own scale wasn't measured).
 	p.model.guns[2] = { "assault rifle", "gun-cm-rifle.bin", { 0x662000 }, 55, 55, 0.88f, false, {}, 0, {}, 0, 340.f };
 	list.push_back(p);
+	// Lupin the Third: The Shooting, original GDS-0018 (MAME lupinshoo). Unlike CM,
+	// its rendering library stores the pixel focal directly: the setter at 0x8C075E40
+	// copies the screen descriptor's focal and centre into 0x0CBD6120 (f, width, height,
+	// cx, cy). RAM captures flat-attract-original, flat-play-original and flat-route-original
+	// show 320 during setup, 2408.04 in one attract camera and 879.4259 in the train scene:
+	// the latter is 320/tan(7280*pi/65536), a horizontal field of view of 39.9902 degrees.
+	// The guards are the setter's four instructions, verified in the original disc's RAM;
+	// they deliberately do not imply support for Rev A. See notes/lupin-findings.md.
+	p = GameProfile();
+	p.gameId = "LUPIN THE THIRD  -THE SHOOTING-";
+	p.gunMenu = true;
+	p.liveFocalAddr = 0xBD6120;
+	p.focalGuards[0] = { 0x075E40, 0xE00C };
+	p.focalGuards[1] = { 0x075E42, 0xD504 };
+	p.focalGuards[2] = { 0x075E44, 0xF348 };
+	p.focalGuards[3] = { 0x075E46, 0xF53A };
+	// The library's perspective setter takes a full-turn angle in r4 and halves it in
+	// the tangent call's delay slot. Keep the full angle instead (40 -> 80 degrees),
+	// affecting the library's projection and frustum together. Guard the call and target
+	// too, so the write cannot land on a different revision. The live focal remains the
+	// drawing frame. Causal head/body hits prove the independent stock descriptor
+	// below remains the light-gun hit-test frame. Original GDS-0018 only.
+	p.fovScale = 2.f;
+	p.fovPatch[0] = { 0x075E1E, 0x4421, 0x0009 };
+	p.fovPatch[1] = { 0x075E18, 0x4F22, 0x4F22 };
+	p.fovPatch[2] = { 0x075E1A, 0xD306, 0xD306 };
+	p.fovPatch[3] = { 0x075E1C, 0x430B, 0x430B };
+	p.fovPatch[4] = { 0x075E34, 0xEDAC, 0xEDAC };
+	p.fovPatch[5] = { 0x075E36, 0x8C08, 0x8C08 };
+	p.stockLens.descriptors = 0x9A58FC; p.stockLens.index = 0x9A6994;
+	p.stockLens.width = 0xBD6124; p.stockLens.stride = 248; p.stockLens.angleOffset = 92; p.stockLens.count = 4;
+	p.stockLens.guards[0] = { 0x024268, 0xE304 };
+	p.stockLens.guards[1] = { 0x02426A, 0x644D };
+	p.stockLens.guards[2] = { 0x02426C, 0x3433 };
+	p.stockLens.guards[3] = { 0x02426E, 0x8F19 };
+	p.stockLens.guards[4] = { 0x024380, 0x00F8 };
+	p.stockLens.guards[5] = { 0x024388, 0x58FC };
+	p.stockLens.guards[6] = { 0x02438A, 0x8C9A };
+	p.stockLens.guards[7] = { 0x0243B4, 0x6994 };
+	p.stockLens.guards[8] = { 0x0243B6, 0x8C9A };
+	p.stockLens.guards[9] = { 0x024400, 0xE05C };
+	p.stockLens.guards[10] = { 0x024402, 0x03EE };
+	p.focal = 879.4259f;
+	// UI depths measured across title, train, ranking and failure screens: inverse W
+	// is an integer multiple of 1/300 (W 0.506757..0.681818). The train's real 3D is
+	// beyond W 16. Keep that whole UI band on a distinct plane; off-screen ticker
+	// glyphs use the same depths and are cropped back to the original game screen.
+	p.hudW = 0.6f;
+	p.snapMinW = 0.49f;
+	p.snapMaxW = 0.75f;
+	p.snapStep = 1.f / 300.f;
+	p.snapInverseDepth = true;
+	p.offScreen2DMaxW = 0.75f;
+	p.flatScreens = true;
+	// Standalone handgun held by the train guards. Each rigid instance has 24 strips;
+	// its three pieces are <0.15 units apart, other instances >10 units away. Select
+	// one whole instance, including detached details, rather than fusing every gun in
+	// the scene. Cache names and preparation are private to this game's Source.
+	p.calibrationAddr = 0xB67DA4; p.calibrationMode = 0x991CC8;
+	p.calibrationGuards = {{
+		{ 0x036F44, 0xD23A }, { 0x036F54, 0x84E4 }, { 0x036F58, 0x84E1 }, { 0x036F5C, 0xB025 },
+		{ 0x036F84, 0xD22A }, { 0x036F94, 0x84E5 }, { 0x036F98, 0x84E3 }, { 0x036F9C, 0x84E2 }, { 0x036F9E, 0xB004 },
+		{ 0x036FAA, 0x2FE6 }, { 0x037024, 640 }, { 0x037026, 320 }, { 0x037028, 480 }, { 0x03702A, 240 },
+		{ 0x037030, 0x7DA4 }, { 0x037032, 0x8CB6 },
+		{ 0x037258, 0x6344 }, { 0x03725E, 0x6244 }, { 0x037260, 0x4318 }, { 0x037262, 0x332C }, { 0x037264, 0x2531 },
+		{ 0x0372C8, 0x82AC }, { 0x0372CA, 0x8CB6 }
+	}};
+	p.p2PromptTextures[0] = 0x92d800;
+	p.p2PromptBox = { 437.5f, 440.5f, 617.5f, 464.5f };
+	p.p2PromptMinSize = { 8.f, 8.f };
+	p.p2HideTrailing = false;
+	p.p2PromptSinglePlayerOnly = true;
+	p.analogOffscreenReload = true;
+	p.movieCutscenes = true;
+	p.noShotFlash = true; // no CRT/UI flash in sampled analog-gun bursts; retain movie/fade layers
+	// Shared atlas: only the original crack depth, before HUD snapping, is a marker.
+	// Native red/blue cracks remain at the unscaled cabinet coordinates even though
+	// the world hit test uses the stock lens. World hit stars stay untouched.
+	p.markerTextures[0] = 0x92d800;
+	p.markerMinW = 0.52630f; p.markerMaxW = 0.52633f;
+	p.markerBeforeSnap = true;
+	p.markerUvBoxes[0] = { .25f, 0.f, .5f, .375f };
+	p.markerUvBoxes[1] = { .5f, .5f, .5625f, .5625f };
+	p.markerUvBoxes[2] = { .875f, .375f, 1.f, .5f };
+	// The library clips real 3D at W=1: the 19 far-out near-plane polygons in
+	// route0001 remain planar to <6e-7 of their extent. Preserve these floors/walls.
+	p.farOutBelowW = 0.999f;
+	// Float VM variables, measured with individual shots, empty pulls and each reload.
+	// P1 has 7 rounds, P2 6; counters rise only when a round fires. Session and active
+	// gates exclude attract shooting, boot noise and continue countdowns.
+	p.gunRam.base = 0xA4C808; p.gunRam.stride = 4;
+	p.gunRam.ammo = 0; p.gunRam.magazine = 16; p.gunRam.shots = 32;
+	p.gunRam.shotWaitMs = 200; // measured accepted input -> VM counter latency up to 168 ms
+	p.gunRam.floats = true; p.gunRam.session = 0xA4C728; p.gunRam.active = 0xA4C738;
+	p.gunRam.guards[0] = { 0x0281EE, 0x930A };
+	p.gunRam.guards[1] = { 0x0281F0, 0xD012 };
+	p.gunRam.guards[2] = { 0x0281F2, 0x2439 };
+	p.gunRam.guards[3] = { 0x028206, 0x07FF };
+	p.gunRam.guards[4] = { 0x02823C, 0xC300 };
+	p.gunRam.guards[5] = { 0x02823E, 0x8CA4 };
+	p.model.kind = hands::Source::LupinGun;
+	p.model.prepSeconds = 180.f;
+	p.model.guns[1] = { "in-game pistol", "gun-lp-pistol.bin", { 0xb80800 }, 24, 24, 0.22f, true,
+			{ 24 }, 12, { 1.f, 0.52442f, 0.08799f }, 0.05f, 0.f, 0.2f };
+	list.push_back(p);
 	return list;
 }
 static const std::vector<GameProfile> profiles = makeProfiles();
 static const GameProfile *activeProfile;	// the game being played (or none)
+
+static bool focalCodeThere(const GameProfile& profile)
+{
+	for (const CodeGuard& guard : profile.focalGuards)
+		if (guard.offset != 0 && ReadMem16_nommu(0x8C000000u + guard.offset) != guard.expected)
+			return false;
+	return true;
+}
+
+static bool readProfileFocal(glm::vec2& focal)
+{
+	if (activeProfile == nullptr || activeProfile->liveFocalAddr == 0 || !focalCodeThere(*activeProfile))
+		return false;
+	const float value = readFloat(activeProfile->liveFocalAddr);
+	if (!plausible(value, 10.f, 20000.f))
+		return false;
+	focal = glm::vec2(std::abs(value));
+	return true;
+}
 
 const hands::Source *gameModelSource()
 {
@@ -538,12 +699,58 @@ const hands::Source *gameModelSource()
 	return nullptr;
 }
 
+bool gameGunMenu() {
+	return activeProfile != nullptr && activeProfile->gunMenu;
+}
+
+int gunShotWaitMs() {
+	return activeProfile != nullptr ? activeProfile->gunRam.shotWaitMs : 100;
+}
+
+bool gameAnalogOffscreenReload() {
+	return activeProfile != nullptr && activeProfile->analogOffscreenReload;
+}
+
+// Invert the live cabinet calibration, preserving EEPROM and the zero-ADC reload
+// sentinel. Cache a bounded integer map per axis/player; rebuild only after that
+// player's six calibration bytes change. The native signed-low-byte parser is part
+// of the forward model (gun_calibration.h), not a patch to shared JVS emulation.
+void calibrateGunInput(int player, int& x, int& y)
+{
+	const GameProfile *prof = activeProfile;
+	if (prof == nullptr || prof->calibrationAddr == 0 || player < 0 || player > 1 || x < 0 || x >= 640 || y < 0 || y >= 480)
+		return;
+	for (const CodeGuard& g : prof->calibrationGuards)
+		if (g.offset != 0 && ReadMem16_nommu(0x8C000000u + g.offset) != g.expected) return;
+	if (prof->calibrationMode != 0 && ReadMem32_nommu(0x8C000000u + prof->calibrationMode) != 1) return;
+	u8 values[6];
+	for (int k = 0; k < 6; k++) values[k] = ReadMem8_nommu(0x8C000000u + prof->calibrationAddr + player * 6 + k);
+	const GunAxisCalibration ax { values[0], values[1], values[4] }, ay { values[2], values[3], values[5] };
+	if (!validGunCalibration(ax) || !validGunCalibration(ay)) return;
+	struct Cache { bool ready = false; u8 values[6] {}; int x[640], y[480]; };
+	static Cache cached[2];
+	static std::mutex mutex;
+	std::lock_guard<std::mutex> lock(mutex);
+	Cache& map = cached[player];
+	if (!map.ready || memcmp(map.values, values, sizeof(values)) != 0)
+	{
+		map.ready = gunCalibrationInverse(640, ax, map.x) && gunCalibrationInverse(480, ay, map.y);
+		if (!map.ready) return;
+		memcpy(map.values, values, sizeof(values));
+		NOTICE_LOG(RENDERER, "VR: P%d calibration inverse %u,%u,%u,%u,%u,%u (EEPROM unchanged)", player + 1,
+				values[0], values[1], values[2], values[3], values[4], values[5]);
+	}
+	x = map.x[x]; y = map.y[y];
+}
+
 static u32 markerTextures[4];	// the active profile's GameProfile::markerTextures
 static u32 p2PromptTextures[4];	// ...and GameProfile::p2PromptTextures
 // Each player's gun as read at the last VBlank (snapGuns, the emulator's thread), for gunState()
 // (the headset's); valid false: not read yet.
 static std::mutex gunMutex;
 static GunState gunSnaps[2];
+static std::atomic<u8> vmPlayers { 0 };
+static std::atomic<bool> vmPlayersKnown { false };
 
 static void applyGameProfile(Event, void *)
 {
@@ -554,6 +761,8 @@ static void applyGameProfile(Event, void *)
 		std::lock_guard<std::mutex> lock(gunMutex);
 		gunSnaps[0] = gunSnaps[1] = GunState {};
 	}
+	vmPlayers = 0;
+	vmPlayersKnown = false;
 	activeProfile = nullptr;
 	// Online (GGPO), what the VR mod writes into a game it has a profile for must be the
 	// same on both sides, whatever each player's settings or machine (a Quest, PCVR, a PC
@@ -717,6 +926,18 @@ bool gunState(int player, GunState& out)
 	return true;
 }
 
+// A float VM counter must be finite, nonnegative and integral before it can be
+// narrowed into the public snapshot. Corrupt/unloaded state never produces feedback.
+static bool vmCount(u32 addr, u32 maximum, u32& value)
+{
+	const float f = readFloat(addr);
+	u32 bits; memcpy(&bits, &f, sizeof(bits));
+	if ((bits & 0x7f800000u) == 0x7f800000u || f < 0.f || f > maximum || f != std::floor(f))
+		return false;
+	value = (u32)f;
+	return true;
+}
+
 // Each VBlank, between two of the game's frames: each player's gun state (gunState), all of it
 // at once so its fields agree. A shot fired a round when the ammo went down, and every shot does
 // while the rifle is held, at this read or the one before (its last, 1 -> 0, is followed by the
@@ -726,6 +947,23 @@ bool gunState(int player, GunState& out)
 static void snapGuns(Event, void *)
 {
 	const GameProfile *prof = activeProfile;
+	u8 enabled = 0;
+	bool vmValid = prof != nullptr && prof->gunRam.floats;
+	if (vmValid)
+	{
+		for (const CodeGuard& g : prof->gunRam.guards)
+			vmValid = vmValid && (g.offset == 0 || ReadMem16_nommu(0x8C000000u + g.offset) == g.expected);
+		u32 session = 0, active[2] {};
+		vmValid = vmValid && vmCount(prof->gunRam.session, 1, session)
+				&& vmCount(prof->gunRam.active, 1, active[0]) && vmCount(prof->gunRam.active + 4, 1, active[1]);
+		if (vmValid && session == 1)
+			enabled = (u8)(active[0] | (active[1] << 1));
+		const u8 was = vmPlayers.exchange(enabled);
+		vmPlayersKnown = vmValid;
+		for (int player = 0; player < 2; player++)
+			if (((was ^ enabled) >> player) & 1)
+				NOTICE_LOG(RENDERER, "VR: P%d active %s", player + 1, ((enabled >> player) & 1) ? "on" : "off");
+	}
 	for (int player = 0; player < 2; player++)
 	{
 		const u32 block = gunBlock(prof, player);
@@ -733,10 +971,21 @@ static void snapGuns(Event, void *)
 			continue;
 		const GameProfile::GunRam& ram = prof->gunRam;
 		GunState now {};
-		now.valid = true;
-		now.ammo = ReadMem8_nommu(block + ram.ammo);
-		now.magazine = ReadMem8_nommu(block + ram.magazine);
-		now.shots = ReadMem16_nommu(block + ram.shots);
+		if (ram.floats)
+		{
+			u32 ammo = 0, magazine = 0, shots = 0;
+			const bool counts = vmValid && vmCount(block + ram.ammo, 255, ammo)
+					&& vmCount(block + ram.magazine, 255, magazine) && vmCount(block + ram.shots, 0xFFFFFF, shots);
+			now.valid = counts && ((enabled >> player) & 1) && magazine > 0 && ammo <= magazine;
+			if (counts) { now.ammo = (u8)ammo; now.magazine = (u8)magazine; now.shots = (u16)shots; }
+		}
+		else
+		{
+			now.valid = true;
+			now.ammo = ReadMem8_nommu(block + ram.ammo);
+			now.magazine = ReadMem8_nommu(block + ram.magazine);
+			now.shots = ReadMem16_nommu(block + ram.shots);
+		}
 		// (the players' byte holds their two bits only: before the game clears its RAM at boot,
 		// ~11 s, it's noise that can read as a rifle in play: fb, with P2's weapon 02, in t14-play)
 		const u8 playing = ram.playing != 0 ? ReadMem8_nommu(0x8C000000u | (ram.playing & 0x01FFFFFFu)) : 0;
@@ -745,7 +994,7 @@ static void snapGuns(Event, void *)
 		std::lock_guard<std::mutex> lock(gunMutex);
 		const GunState was = gunSnaps[player];
 		now.fired = was.fired;
-		if (was.valid)
+		if (was.valid && now.valid)
 		{
 			// (a drop, or more than 8 at once: the game cleared its RAM, a new game; the ammo's low
 			// byte compared signed: a shot is -1, a refill at most +45, and the scope view's 10000
@@ -758,6 +1007,8 @@ static void snapGuns(Event, void *)
 			if (now.rifle != was.rifle)
 				NOTICE_LOG(RENDERER, "VR: P%d weapon %s -> %s", player + 1, was.rifle ? "rifle" : "pistol", now.rifle ? "rifle" : "pistol");
 		}
+		if (ram.floats && now.valid && !was.valid)
+			NOTICE_LOG(RENDERER, "VR: P%d magazine 0 -> %d", player + 1, now.magazine);
 		gunSnaps[player] = now;
 	}
 }
@@ -972,7 +1223,27 @@ float worldScale()
 static float stockFocal()
 {
 	const GameProfile *prof = activeProfile;
-	if (prof != nullptr && prof->stockFocalAddr != 0)
+	if (prof != nullptr && prof->stockLens.descriptors != 0 && focalCodeThere(*prof))
+	{
+		const auto& lens = prof->stockLens;
+		bool guarded = true;
+		for (const CodeGuard& g : lens.guards)
+			guarded = guarded && (g.offset == 0 || ReadMem16_nommu(0x8C000000u + g.offset) == g.expected);
+		const u32 index = ReadMem32_nommu(0x8C000000u + lens.index);
+		if (guarded && index < lens.count)
+		{
+			const u32 angle = ReadMem32_nommu(0x8C000000u + lens.descriptors + index * lens.stride + lens.angleOffset);
+			const float width = readFloat(lens.width);
+			if (angle > 1 && angle <= 65535 && plausible(width, 10.f, 2000.f))
+			{
+				// The original SH4 setter uses an integer right shift before its
+				// tangent, including odd angles; do not infer this from live focal.
+				const float f = (float)((width * .5) / std::tan((angle >> 1) * (6.28318530717958647692 / 65536.0)));
+				if (plausible(f, 10.f, 20000.f)) return f;
+			}
+		}
+	}
+	if (activeProfile != nullptr && activeProfile->stockFocalAddr != 0 && focalCodeThere(*prof))
 	{
 		float f = readFloat(prof->stockFocalAddr);
 		if (prof->stockFocalInverse)
@@ -1115,7 +1386,8 @@ static void snapNear2D(rend_context& ctx, const std::vector<PolyParam>& list, u3
 		if (!(z > 0.f) || !std::isfinite(z))
 			continue;
 		const float w = 1.f / z;
-		if (w < minW || w > SnapMaxW || w == hudW || std::abs(w / step - std::round(w / step)) > 0.02f)
+		const float layer = prof != nullptr && prof->snapInverseDepth ? z : w;
+		if (w < minW || w > SnapMaxW || w == hudW || std::abs(layer / step - std::round(layer / step)) > 0.02f)
 			continue;
 		const bool anywhere = w < offScreenMaxW;
 		bool off = false;
@@ -1420,7 +1692,7 @@ static bool snapFlatScreen(rend_context& ctx, const RenderPass& pass, const Rend
 	if (activeProfile == nullptr || !activeProfile->flatScreens)
 		return false;
 	bool flat = true;
-	float wMax = 0.f;
+	float wMax = 0.f, zMin = 1e30f, zMax = 0.f;
 	u32 polys = 0;
 	auto each = [&](auto&& fn) {
 		auto list = [&](const std::vector<PolyParam>& polys, u32 from, u32 to) {
@@ -1443,6 +1715,8 @@ static bool snapFlatScreen(rend_context& ctx, const RenderPass& pass, const Rend
 			if (std::abs(ctx.verts[i].z - z) > z * 1e-5f)
 				flat = false;
 		wMax = std::max(wMax, 1.f / z);
+		zMin = std::min(zMin, z);
+		zMax = std::max(zMax, z);
 		polys++;
 	});
 	if (!flat || polys == 0 || wMax <= hudW + 0.01f)
@@ -1451,7 +1725,12 @@ static bool snapFlatScreen(rend_context& ctx, const RenderPass& pass, const Rend
 		const float z = ctx.verts[pp.first].z;
 		if (!(z > 0.f) || !std::isfinite(z))
 			return;
-		const float t = std::clamp((1.f / z - hudW) / (wMax - hudW), -1.f, 1.f);
+		// Preserve the library's inverse-depth spacing on Lupin's all-flat screens.
+		// Compressing W 0.5..100 linearly collapsed neighbouring font layers to
+		// the same depth-buffer value and left holes in the title and captions.
+		const float t = activeProfile->snapInverseDepth && zMax > zMin
+				? 2.f * (zMax - z) / (zMax - zMin) - 1.f
+				: std::clamp((1.f / z - hudW) / (wMax - hudW), -1.f, 1.f);
 		const float snapped = 1.f / (hudW + 0.0015f * t);
 		for (u32 i = pp.first; i < pp.first + pp.count; i++)
 			ctx.verts[i].z = snapped;
@@ -1502,6 +1781,11 @@ static void hidePlayer2Prompt(rend_context& ctx, const RenderPass& pass, const R
 {
 	if (p2PromptTextures[0] == 0)
 		return;
+	// Lupin shares this atlas/box with P2 feedback. Hide only the measured P1-only
+	// join message; waiting screens and an active P2 retain all their own glyphs.
+	if (activeProfile != nullptr && activeProfile->p2PromptSinglePlayerOnly
+			&& (!vmPlayersKnown.load() || vmPlayers.load() != 1))
+		return;
 	// (not online: player 2 is a real player there, and on the guest it's the player's own)
 	const bool hide = config::VrHideP2Prompt && !config::GGPOEnable;
 	struct Box { float x0, y0, x1, y1; };
@@ -1535,7 +1819,9 @@ static void hidePlayer2Prompt(rend_context& ctx, const RenderPass& pass, const R
 		const ScreenBox& at = activeProfile != nullptr ? activeProfile->p2PromptBox : ScreenBox { 352.f, 384.f, 640.f, 480.f };
 		const float sx = fbWidth / 640.f, sy = fbHeight / 480.f;
 		if (tex == 0 || std::find(std::begin(p2PromptTextures), std::end(p2PromptTextures), tex) == std::end(p2PromptTextures)
-				|| !flat(pp, b) || b.x0 < at.x0 * sx || b.y0 < at.y0 * sy || b.x1 > at.x1 * sx || b.y1 > at.y1 * sy)
+				|| !flat(pp, b) || b.x0 < at.x0 * sx || b.y0 < at.y0 * sy || b.x1 > at.x1 * sx || b.y1 > at.y1 * sy
+				|| (activeProfile != nullptr && (b.x1 - b.x0 < activeProfile->p2PromptMinSize.x * sx
+						|| b.y1 - b.y0 < activeProfile->p2PromptMinSize.y * sy)))
 			return;
 		if (hide)
 			hideVertices(ctx, pp);
@@ -1568,6 +1854,8 @@ static void hidePlayer2Prompt(rend_context& ctx, const RenderPass& pass, const R
 }
 
 bool player2Prompting() {
+	if (activeProfile != nullptr && activeProfile->gunRam.floats)
+		return (vmPlayers.load() & 2) == 0;
 	return steadyMs() - p2PromptAt < 500;
 }
 
@@ -1594,7 +1882,7 @@ static void closeCutsceneFrame(Event, void *)
 		withBars = without = 0;
 		cutsceneOn = false;
 	}
-	if (prof == nullptr || prof->letterboxTextures[0] == 0 || prof->gunRam.playing == 0 || cutscenePasses.exchange(0) == 0)
+	if (prof == nullptr || (prof->letterboxTextures[0] == 0 && !prof->movieCutscenes) || (prof->gunRam.playing == 0 && !prof->gunRam.floats) || cutscenePasses.exchange(0) == 0)
 		return;
 	const bool bars = cutsceneBars.exchange(0) > 0;
 	if (bars)
@@ -1605,8 +1893,8 @@ static void closeCutsceneFrame(Event, void *)
 	else if (++without >= CutsceneOffFrames)
 		withBars = 0;
 	// (the players' byte holds their two bits only: anything else is the RAM before the game clears it)
-	const u8 playing = ReadMem8_nommu(0x8C000000u | (prof->gunRam.playing & 0x01FFFFFFu));
-	const bool inGame = (playing & ~3) == 0 && (playing & 3) != 0;
+	const u8 playing = prof->gunRam.playing != 0 ? ReadMem8_nommu(0x8C000000u | (prof->gunRam.playing & 0x01FFFFFFu)) : 0;
+	const bool inGame = prof->gunRam.floats ? vmPlayers.load() != 0 : (playing & ~3) == 0 && (playing & 3) != 0;
 	const bool on = inGame && withBars >= CutsceneOnFrames;
 	if (on != cutsceneOn)
 	{
@@ -1641,7 +1929,7 @@ static void logPlayer2Prompt()
 }
 
 bool player2PromptKnown() {
-	return p2PromptTextures[0] != 0;
+	return p2PromptTextures[0] != 0 || (activeProfile != nullptr && activeProfile->gunRam.floats && vmPlayersKnown);
 }
 
 // A 3D polygon with some of its corners at the 2D plane's W (a game whose near plane is
@@ -2096,6 +2384,30 @@ void dropShotMarker(rend_context& ctx, const RenderPass& pass, const RenderPass&
 		logOverlayCensus(ctx, pass, previousPass, hudW);
 	int fbWidth, fbHeight;
 	getPvrFramebufferSize(ctx, fbWidth, fbHeight);
+	// Lupin's story uses inset (448x288) and full-screen YUV movie quads.
+	// Test original (pre-snap) geometry: flat at the measured UI band, covering
+	// at least half the frame width and 5/12 of its height. Session/player gates and the same 18/6-frame debounce exclude
+	// attract movies, fades and momentary frame transitions.
+	if (activeProfile != nullptr && activeProfile->movieCutscenes)
+	{
+		bool movie = false;
+		auto scan = [&](const std::vector<PolyParam>& list, u32 from, u32 to) {
+			for (u32 n = from; n < to && n < list.size() && !movie; n++) {
+				const PolyParam& pp = list[n];
+				if (!pp.pcw.Texture || pp.tcw.PixelFmt != 3 || pp.count != 4 || pp.first + pp.count > ctx.verts.size()) continue;
+				const float z = ctx.verts[pp.first].z;
+				if (!(z > 0.f) || 1.f / z < activeProfile->snapMinW || 1.f / z > activeProfile->snapMaxW) continue;
+				glm::vec2 lo(1e30f), hi(-1e30f); bool flat = true;
+				for (u32 j = pp.first; j < pp.first + pp.count; j++) { const Vertex& v = ctx.verts[j]; flat = flat && std::isfinite(v.x) && std::isfinite(v.y) && std::abs(v.z - z) < z * 1e-5f; lo = glm::min(lo, glm::vec2(v.x,v.y)); hi = glm::max(hi, glm::vec2(v.x,v.y)); }
+				movie = flat && lo.x >= -1.f && lo.y >= -1.f && hi.x <= fbWidth + 1.f && hi.y <= fbHeight + 1.f
+						&& hi.x - lo.x >= fbWidth * .5f && hi.y - lo.y >= fbHeight * (5.f / 12.f);
+			}
+		};
+		scan(ctx.global_param_op, std::max(previousPass.op_count, 1u), pass.op_count);
+		scan(ctx.global_param_pt, previousPass.pt_count, pass.pt_count);
+		scan(ctx.global_param_tr, previousPass.tr_count, pass.tr_count);
+		if (movie) cutsceneBars++;
+	}
 	// The letterbox first: only what the game drew at the plane's W, as the shader used to
 	// (a black text shadow on a snapped layer must stay). The first opaque polygon is the
 	// background plane.
@@ -2111,6 +2423,45 @@ void dropShotMarker(rend_context& ctx, const RenderPass& pass, const RenderPass&
 		barsShown = bars > 0;
 		if (bars > 0)
 			cutsceneBars++;
+	}
+	// A shared HUD atlas needs its original depth to distinguish the shot crack.
+	// Classify before snapNear2D replaces that depth. Each shot is still gated by
+	// 3D aim and the measured small neighborhood around the native gun coordinate.
+	if (activeProfile != nullptr && activeProfile->markerBeforeSnap && config::VrDropShotMarker)
+	{
+		const int64_t now = steadyMs();
+		u32 dropped = 0;
+		auto scan = [&](const std::vector<PolyParam>& list, u32 from, u32 to) {
+			for (u32 n = from; n < to && n < list.size(); n++) {
+				const PolyParam& pp = list[n];
+				const u32 tex = pp.pcw.Texture ? pp.tcw.TexAddr << 3 : 0;
+				if (tex == 0 || pp.count != 4 || pp.first + pp.count > ctx.verts.size()
+						|| std::find(std::begin(markerTextures), std::end(markerTextures), tex) == std::end(markerTextures)) continue;
+				glm::vec2 lo(1e30f), hi(-1e30f), uvLo(1e30f), uvHi(-1e30f); bool match = true;
+				for (u32 j = pp.first; j < pp.first + pp.count; j++) {
+					const Vertex& v = ctx.verts[j]; const float w = v.z > 0.f ? 1.f / v.z : 0.f;
+					match = match && w >= activeProfile->markerMinW && w <= activeProfile->markerMaxW
+							&& std::isfinite(v.x) && std::isfinite(v.y);
+					lo = glm::min(lo, glm::vec2(v.x,v.y)); hi = glm::max(hi, glm::vec2(v.x,v.y));
+					uvLo = glm::min(uvLo, glm::vec2(v.u,v.v)); uvHi = glm::max(uvHi, glm::vec2(v.u,v.v));
+				}
+				bool markerUv = false;
+				for (const ScreenBox& box : activeProfile->markerUvBoxes)
+					markerUv = markerUv || (box.x1 > box.x0 && box.y1 > box.y0 && uvLo.x >= box.x0 - 1e-5f
+							&& uvLo.y >= box.y0 - 1e-5f && uvHi.x <= box.x1 + 1e-5f && uvHi.y <= box.y1 + 1e-5f);
+				if (!markerUv || !match || hi.x - lo.x > MarkerMaxSize || hi.y - lo.y > MarkerMaxSize) continue;
+				const glm::vec2 centre = (lo + hi) * .5f;
+				for (GunShot& shot : gunShots) {
+					const int64_t at = shot.ms; const u32 pos = shot.pos; const bool into3D = shot.into3D;
+					if (shot.ms != at || !into3D || now - at < 0 || now - at > MarkerMs) continue;
+					const glm::vec2 hit((pos & 0xffff) * fbWidth / 640.f, (pos >> 16) * fbHeight / 480.f);
+					if (glm::distance(centre, hit) > MarkerMaxOffset) continue;
+					hideVertices(ctx, pp); dropped++; break;
+				}
+			}
+		};
+		scan(ctx.global_param_tr, previousPass.tr_count, pass.tr_count);
+		if (dropped > 0) NOTICE_LOG(RENDERER, "VR: hid original-depth shot marker (%u polygons)", dropped);
 	}
 	if (!snapFlatScreen(ctx, pass, previousPass, hudW))
 	{
@@ -2235,7 +2586,7 @@ void dropShotMarker(rend_context& ctx, const RenderPass& pass, const RenderPass&
 			// polygon by the 2D plane that isn't flat on it - the game's flash quads come at
 			// W 0.9..1.01, while its HUD and text sit at one W.
 			const u32 tex = pp.pcw.Texture ? pp.tcw.TexAddr << 3 : 0u;
-			const bool markerTex = tex != 0 && std::find(std::begin(markerTextures), std::end(markerTextures), tex) != std::end(markerTextures);
+			const bool markerTex = !(activeProfile != nullptr && activeProfile->markerBeforeSnap) && tex != 0 && std::find(std::begin(markerTextures), std::end(markerTextures), tex) != std::end(markerTextures);
 			const bool nearPlane = (wMin >= 0.85f && wMax <= 1.15f)
 					|| (activeProfile != nullptr && wMin >= activeProfile->markerMinW && wMax <= activeProfile->markerMaxW);
 			const bool markerLike = nearPlane && (markerTex || wMax - wMin > 0.004f)

@@ -414,8 +414,9 @@ vr.Xr = yes
 $readme = @'
 Lupin the Third VR, PC development build
 
-Implementation in progress. Camera, aiming/HUD, player/weapon state and in-game gun model
-research are not complete. Full feature parity and physical headset validation are pending.
+Implementation in progress. The CM 1.2 feature set is ported with Lupin-specific camera,
+calibration, native shot state and gun extraction. Physical headset validation and later-stage
+coverage remain pending. See the source validation report and physical headset checklist.
 This build inherits Flycast and mikermak's hotd2-vr (https://github.com/mikermak/hotd2-vr).
 Check the source README and Lupin findings for the current verified scope.
 
@@ -431,10 +432,13 @@ Check the source README and Lupin findings for the current verified scope.
 3. Double-click "Play Lupin the Third.cmd". It starts flycast.exe with roms\lupinshoo.zip
    and the archive folder as its working directory, so this copy uses its own emu.cfg.
 
-Inherited controls to validate in Lupin: trigger shoots, A is P1 Start, B is P1 Reload;
+Controls: trigger shoots, A is P1 Start, B is P1 Reload;
 X is P2 Start and Y is P2 Reload. Left Menu opens settings, left stick click recenters,
-right stick click toggles the laser. Game-specific aiming, reloads, actual-shot feedback,
-P2 lifecycle, cutscenes and extraction are research work, not verified parity claims.
+right stick click toggles the laser. The paused menu includes gun choice/angle, both reload
+modes, haptics, world size, panel distance, wider view, How to play and confirmed Quit.
+First start makes a complete pistol from your own game. B skips; a later start retries.
+P1 has seven rounds, P2 six; native accepted rounds drive recoil/flash/haptics. No game data
+or generated gun cache is supplied.
 Without an OpenXR headset, use the desktop window for development. emu.cfg enables VR
 (vr.Xr = yes), OpenGL (pvr.rend = 0) and native depth interpolation.
 

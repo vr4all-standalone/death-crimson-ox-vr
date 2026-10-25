@@ -99,6 +99,16 @@ GameCamera gameCamera(const rend_context& ctx);
 // What the game being played makes its own model from (hands_rip.h: the agent's hands and
 // pistol, the hero's staff), or nullptr when its profile has none.
 const hands::Source *gameModelSource();
+// The running game offers the shared in-game/file-gun menu, independently of whether
+// its own pistol has been discovered or captured yet.
+bool gameGunMenu();
+// The game reloads from the analog off-screen sensor even with no trigger (Lupin).
+bool gameAnalogOffscreenReload();
+// Wait for the native accepted-shot counter before classifying an empty pull.
+int gunShotWaitMs();
+// Intended 640x480 game pixels -> cabinet ADC coordinates, inverse of live calibration.
+// Off-screen/reload positions pass through unchanged.
+void calibrateGunInput(int player, int& x, int& y);
 
 // A player's gun as the game being played keeps it (its profile's GunRam), read at the last
 // VBlank: the rounds left, the magazine's size, the shots it has fired (+1 per shot, through

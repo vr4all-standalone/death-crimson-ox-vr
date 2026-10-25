@@ -597,10 +597,8 @@ int ownIndex(GunKind kind)
 	return i >= 0 && i < (int)ownGuns.size() ? i : -1;
 }
 
-bool cmGuns()
-{
-	const hands::Source *source = gameModelSource();
-	return source != nullptr && source->kind == hands::Source::CmGuns;
+bool selectableGuns() {
+	return gameGunMenu();
 }
 
 }	// namespace
@@ -608,7 +606,7 @@ bool cmGuns()
 const HandsModel *handsModel()
 {
 	refresh();
-	if (cmGuns())
+	if (selectableGuns())
 		return gunModel(chosenGun());
 	Slot& slot = slots[GameSlot];
 	if (!slot.tried)
@@ -626,7 +624,7 @@ const HandsModel *handsModel()
 const HandsModel *gunModel(GunKind kind)
 {
 	refresh();
-	if (kind == GunKind::Arcade || !cmGuns())
+	if (kind == GunKind::Arcade || !selectableGuns())
 		return nullptr;
 	if ((int)kind >= OwnGuns)
 	{
@@ -640,10 +638,22 @@ const HandsModel *gunModel(GunKind kind)
 	{
 		slot.tried = true;
 		// (a kind's file is the profile's guns[kind - 1]: guns[0], 1.1's cabinet gun's, is none now)
-		const hands::GunTarget& gun = gameModelSource()->guns[(int)kind - 1];
 		slot.missing = true;
-		if (gun.used())
-			slot.loaded = load(slot.model, get_writable_data_path(gun.file), std::string(), slot.missing);
+		const hands::Source *source = gameModelSource();
+		if (source != nullptr)
+		{
+			const hands::GunTarget& gun = source->guns[(int)kind - 1];
+			if (gun.used())
+			{
+				const std::string path = get_writable_data_path(gun.file);
+				// Lupin's prep and renderer must agree: skipped/rejected caches keep the fallback.
+				// CM still accepts its partial guns under the existing generic-loader policy.
+				if (source->kind == hands::Source::LupinGun && !hands::loadGunCache(path, gun))
+					slot.missing = !file_exists(path);
+				else
+					slot.loaded = load(slot.model, path, std::string(), slot.missing);
+			}
+		}
 	}
 	return slot.loaded ? &slot.model.info : nullptr;
 }
@@ -681,7 +691,7 @@ const char *gunName(GunKind kind)
 GunKind chosenGun()
 {
 	refresh();
-	if (!cmGuns())
+	if (!selectableGuns())
 		return GunKind::Arcade;	// (another game's own model takes no choosing: handModel())
 	// the assault rifle's model too, read at the start with the other guns (drawHands() puts it on
 	// the GPU with them): at the pickup, mid-play, it could cost the headset a frame (Ruling S33)
@@ -750,7 +760,7 @@ GunKind chosenGun()
 
 GunKind handGun(int player)
 {
-	if (player < 0 || player > 1 || !cmGuns())
+	if (player < 0 || player > 1 || !selectableGuns())
 		return chosenGun();
 	// The in-game pistol's pickup is the in-game rifle (its model); any other gun stays in the hand and
 	// fires the rifle's rounds (CM VR 1.2 spec section 2: gunKnocks' Shot and Auto knocks, each with its
@@ -784,13 +794,13 @@ const HandsModel *handModel(GunKind kind)
 		return gunModel(kind);
 	if (!config::VrGameHands)
 		return nullptr;
-	return cmGuns() ? gunModel(kind) : handsModel();
+	return selectableGuns() ? gunModel(kind) : handsModel();
 }
 
 std::vector<GunChoice> gunChoices()
 {
 	// another game's own model takes no choosing: one choice, the row locked (vr.Gun kept)
-	if (!cmGuns())
+	if (!selectableGuns())
 		return { { (int)config::VrGun, config::VrGameHands && handsModel() != nullptr ? "The game's own" : "Arcade gun", true, true } };
 	// (with the game's own models off the pistol isn't made: the row passes it)
 	std::vector<GunChoice> choices {

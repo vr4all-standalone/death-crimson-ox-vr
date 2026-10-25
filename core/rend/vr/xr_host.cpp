@@ -159,6 +159,7 @@ struct Gun
 	// When the last reload started (racked slide, gun pointed down; 0: done), and a
 	// trigger held through it.
 	XrTime reloadAt;
+	bool reloadButtonWas = false;
 	bool triggerWait;
 	bool pointedDown;
 	// as drawn (no pose: hidden), with the last shot for recoil and flash
@@ -700,7 +701,7 @@ bool init()
 #endif
 	createInfo.enabledExtensionCount = (u32)extensions.size();
 	createInfo.enabledExtensionNames = extensions.data();
-	strcpy(createInfo.applicationInfo.applicationName, "Confidential Mission VR");
+	strcpy(createInfo.applicationInfo.applicationName, "Lupin the Third VR");
 	createInfo.applicationInfo.applicationVersion = 1;
 	strcpy(createInfo.applicationInfo.engineName, "Flycast");
 	createInfo.applicationInfo.engineVersion = 1;
@@ -1449,7 +1450,7 @@ void updateOtherHand(XrTime time, int hand, bool tracked, const XrSpaceLocation&
 // the assault rifle, the first round after a pull is a Shot and the rest of the burst Auto knocks
 // (autoKnock), one per round. Each Shot and Auto knock also kicks the gun and flashes its muzzle
 // (whatever vr.Haptics says), so a pull that fires no round kicks none. A pull on the screen it
-// hasn't fired for within 0.1 s (an empty gun) is a click. Only shots of this hand's trigger knock: held, or let go under 0.25 s ago (the
+// hasn't fired within the profile's measured input delay is a click. Only shots of this hand's trigger knock: held, or let go under 0.25 s ago (the
 // counter also moves when the game clears its RAM at boot, and its attract demo's players shoot).
 // The knocks go to the hand one at a time, each once the one before has ended (two haptic calls
 // closer than that feel as one: the second cuts the first short). Without a GunRam in the game's
@@ -1496,7 +1497,7 @@ void gunKnocks(Gun& g, XrTime time, bool trigger)
 		}
 		g.pullAt = 0;
 	}
-	else if (g.pullAt != 0 && time - g.pullAt > 100'000'000LL)
+	else if (g.pullAt != 0 && time - g.pullAt > (XrTime)vr::gunShotWaitMs() * 1'000'000LL)
 	{
 		g.clicksDue++;
 		g.pullAt = 0;
@@ -1740,6 +1741,15 @@ void updateGun(Gun& g, XrTime time, const XrSpaceLocation *locations, const bool
 	if (trigger && onScreen && (!strcmp(aimHow, "2D") || !strcmp(aimHow, "menu") || !strcmp(aimHow, "screen")))
 		buttons |= 256;
 	buttons |= extra;
+	// Lupin's cabinet B is the off-screen sensor, not CM's second button.
+	// Use the existing bounded reload pulse/feedback and swallow it when released.
+	if (vr::gameAnalogOffscreenReload())
+	{
+		const bool pressed = (extra & 128) != 0;
+		if (pressed && !g.reloadButtonWas) { g.reloadAt = time; haptic(g.hand, 0.02f, 0.5f); NOTICE_LOG(INPUT, "XR: player %d reload button (sensor)", g.player + 1); }
+		g.reloadButtonWas = pressed;
+		buttons &= ~128u;
+	}
 	// A reload (the slide racked, the gun pointed down): the trigger let go for a moment,
 	// then pulled off the screen. A trigger held through it waits to be let go, so it
 	// doesn't fire right after.
@@ -2866,29 +2876,31 @@ bool frame()
 	const hands::Source *source = gameModelSource();
 	const bool staff = source != nullptr && source->kind == hands::Source::HerosStaff;
 	const bool cmGuns = source != nullptr && source->kind == hands::Source::CmGuns;
-	const char *title = cmGuns ? "CONFIDENTIAL MISSION VR" : staff ? "THE MAZE OF THE KINGS VR" : "THE HOUSE OF THE DEAD 2 VR";
+	const bool lupinGun = source != nullptr && source->kind == hands::Source::LupinGun;
+	const bool gunModels = cmGuns || lupinGun;
+	const char *title = lupinGun ? "LUPIN THE THIRD VR" : cmGuns ? "CONFIDENTIAL MISSION VR" : staff ? "THE MAZE OF THE KINGS VR" : "THE HOUSE OF THE DEAD 2 VR";
 	// CM VR 1.2: Confidential Mission's panels in its start screen's colours (VR4All's: the panel, its
 	// line, violet, cream, muted grey, lime)
 	const glm::vec3 violet(169 / 255.f, 155 / 255.f, 1.f), cream(248 / 255.f, 245 / 255.f, 239 / 255.f), muted(155 / 255.f, 165 / 255.f, 180 / 255.f);
-	if (cmGuns)
+	if (gunModels)
 	{
 		panel.back = glm::vec3(21 / 255.f, 25 / 255.f, 35 / 255.f);
 		panel.frame = panel.barTrack = glm::vec3(52 / 255.f, 57 / 255.f, 71 / 255.f);
 		panel.barFill = glm::vec3(217 / 255.f, 243 / 255.f, 108 / 255.f);
 		panel.footerColour = muted;
 	}
-	if (preparing && cmGuns)
+	if (preparing && gunModels)
 	{
 		panel.lines = {
 			{ title, 0.085f, violet },
 			{ "", 0.03f, cream },
-			{ "Making your guns from your game files (once)", 0.064f, cream },
-			{ "About a minute or two, only this once", 0.047f, muted },
+			{ lupinGun ? "Making your pistol from your game files (once)" : "Making your guns from your game files (once)", 0.064f, cream },
+			{ lupinGun ? "Watching the attract demo, only this once" : "About a minute or two, only this once", 0.047f, muted },
 		};
 		panel.progress = hands::prepProgress();
 		panel.footer = "B: skip (the Arcade gun this time)";
 	}
-	else if (std::chrono::steady_clock::now() < doneUntil && cmGuns)
+	else if (std::chrono::steady_clock::now() < doneUntil && gunModels)
 		panel.lines = {
 			{ title, 0.085f, violet },
 			{ "", 0.03f, cream },

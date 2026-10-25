@@ -29,6 +29,7 @@
 #include "log/Log.h"
 #include "rend/vr_reproject.h"
 #include "rend/vr/xr_sim.h"
+#include "rend/vr/gun_input.h"
 
 #include <atomic>
 #include <chrono>
@@ -56,6 +57,7 @@ namespace
 
 std::atomic<bool> running;
 u32 lastButtons[4];
+vr::GunInput gunInputs[4];
 std::atomic<int64_t> lastPacketMs[4];
 
 int64_t nowMs() {
@@ -102,16 +104,20 @@ void lightgunSet(int player, int x, int y, u32 buttons)
 {
 	if (player < 0 || player > 3)
 		return;
+	vr::adaptGunInput(gunInputs[player], vr::gameAnalogOffscreenReload(), x, y, buttons);
 	lastPacketMs[player] = nowMs();
-	mo_x_abs[player] = x * 640 / 10000;
-	mo_y_abs[player] = y * 480 / 10000;
+	const int screenX = x * 640 / 10000, screenY = y * 480 / 10000;
+	int cabinetX = screenX, cabinetY = screenY;
+	vr::calibrateGunInput(player, cabinetX, cabinetY);
+	mo_x_abs[player] = cabinetX;
+	mo_y_abs[player] = cabinetY;
 	// Only touch the buttons that changed, so the keyboard and pads keep working.
 	const u32 changed = buttons ^ lastButtons[player];
 	if (changed & 1)
 		setButton(player, DC_BTN_A, buttons & 1);
 	if ((changed & 1) && (buttons & 1) && player <= 1)
 		// the game draws its own shot marker here (see vr::dropShotMarker)
-		vr::noteGunShot(mo_x_abs[player], mo_y_abs[player], (buttons & 256) == 0);
+		vr::noteGunShot(screenX, screenY, (buttons & 256) == 0);
 	if (changed & 2)
 		setButton(player, DC_BTN_RELOAD, buttons & 2);
 	if (changed & 4)
@@ -128,8 +134,10 @@ void lightgunSet(int player, int x, int y, u32 buttons)
 		setButton(player, DC_BTN_B, buttons & 128);
 	if (changed & 0xff)		// (bit 8 flips whenever a held trigger crosses into the 2D plane)
 		NOTICE_LOG(INPUT, "Light gun P%d at %d,%d: trigger %d reload %d start %d d-pad %x B %d 2D %d", player + 1,
-				mo_x_abs[player], mo_y_abs[player], buttons & 1, (buttons >> 1) & 1, (buttons >> 2) & 1,
+				screenX, screenY, buttons & 1, (buttons >> 1) & 1, (buttons >> 2) & 1,
 				(buttons >> 3) & 15, (buttons >> 7) & 1, (buttons >> 8) & 1);
+	if ((changed & 1) && (buttons & 1) && (cabinetX != screenX || cabinetY != screenY))
+		NOTICE_LOG(INPUT, "VR: P%d cabinet %d,%d for ray %d,%d", player + 1, cabinetX, cabinetY, screenX, screenY);
 	lastButtons[player] = buttons;
 }
 
@@ -175,6 +183,7 @@ void listen(int port)
 
 void onStart(Event, void *)
 {
+	for (auto& input : gunInputs) input = vr::GunInput {};
 	const int port = config::VrUdpPort;
 	if (port <= 0 || running)
 		return;

@@ -110,7 +110,7 @@ static void sdl_close_joystick(SDL_JoystickID instance)
 }
 
 // hotd2-vr: modified in 2026, the window titles name the app.
-static const char *const AppName = "Confidential Mission VR";
+static const char *const AppName = "Lupin the Third VR";
 
 static void setWindowTitleGame()
 {

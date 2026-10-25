@@ -87,6 +87,8 @@ function Test-LogLines([string]$name, [string[]]$Expect = @(), [string[]]$Reject
 # vr-test.ps1 with these parameters: $null when it passed, else why not. -Reuse: the run's
 # Expect/Reject on the flycast.log already there, when there is one.
 function Invoke-VrTest([hashtable]$params) {
+	if (-not $params.ContainsKey('Port')) { $params.Port = 27046 }
+	if (-not $params.ContainsKey('Visible') -and (@($params.At) + @($params.On) -match '(=|[|])shot(?: |$)')) { $params.Visible = $true }
 	if ($Reuse -and (Test-Path -LiteralPath (Get-RunLog $params.Name))) {
 		Write-Host "  reusing build-win\vrtest\$($params.Name)"
 		return Test-LogLines $params.Name $params.Expect $params.Reject
@@ -1791,6 +1793,17 @@ function Test-CmMergeUnit {
 $ownMuzzle = $null
 $ownTextures = [ordered]@{}
 $ownBundled = Join-Path $repo 'build-win\data\models'
+# Every fixture move/delete resolves and stays under the explicitly supplied private
+# game root or this checkout's build directory, including temporary hold names.
+function Assert-FixturePath([string]$path) {
+    $full = [IO.Path]::GetFullPath($path)
+    $roots = @((Join-Path $repo 'build-win'), $env:VRLGH_GAMES) | Where-Object { $_ }
+    foreach ($root in $roots) {
+        $base = [IO.Path]::GetFullPath($root).TrimEnd('\') + '\'
+        if ($full.StartsWith($base, [StringComparison]::OrdinalIgnoreCase)) { return }
+    }
+    throw "Fixture path is outside the private build/game roots: $full"
+}
 function Invoke-OwnFolders([scriptblock]$body, [string[]]$Fixture = @(), [string[]]$Bundled = @()) {
 	$held = @()
 	$made = @()
@@ -1798,6 +1811,8 @@ function Invoke-OwnFolders([scriptblock]$body, [string[]]$Fixture = @(), [string
 		$dirs = @(foreach ($root in @((Join-Path $repo 'build-win'), $env:VRLGH_GAMES) | Where-Object { $_ }) {
 			foreach ($sub in 'guns', 'controllers') { Join-Path $root $sub } }) + $ownBundled
 		foreach ($dir in $dirs) {
+			Assert-FixturePath $dir
+			Assert-FixturePath "$dir.accept-hold"
 			if (Test-Path -LiteralPath "$dir.accept-hold") { throw "$dir.accept-hold is there from a run that died: put it back as $dir first" }
 			if (Test-Path -LiteralPath $dir) { Move-Item -LiteralPath $dir -Destination "$dir.accept-hold"; $held += $dir }
 		}
@@ -1828,10 +1843,13 @@ function Invoke-OwnFolders([scriptblock]$body, [string[]]$Fixture = @(), [string
 		# would land inside the leftover as guns\guns.accept-hold) and the scenario fails saying so
 		$stuck = @()
 		foreach ($dir in $made) {
+			Assert-FixturePath $dir
 			Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
 			if (Test-Path -LiteralPath $dir) { $stuck += $dir }
 		}
 		foreach ($dir in $held) {
+			Assert-FixturePath $dir
+			Assert-FixturePath "$dir.accept-hold"
 			if (Test-Path -LiteralPath $dir) {
 				Write-Host "  !! $dir could not be removed: the player's folder is left in $dir.accept-hold; put it back by hand" -ForegroundColor Red
 				$stuck += $dir
@@ -1978,6 +1996,7 @@ function Test-CmOwnGunFile {
 function Test-OwnFolders {
 	$guns = Join-Path $repo 'build-win\guns'
 	$aside = "$guns.own-folders-hold"
+	foreach ($path in $guns, "$guns.accept-hold", $aside) { Assert-FixturePath $path }
 	foreach ($p in "$guns.accept-hold", $aside) { if (Test-Path -LiteralPath $p) { return "$p is there from a run that died: put it back first" } }
 	$moved = Test-Path -LiteralPath $guns
 	if ($moved) { Move-Item -LiteralPath $guns -Destination $aside }
@@ -2250,7 +2269,7 @@ foreach ($name in $names) {
 		$failed++
 		continue
 	}
-	Get-Process flycast -ErrorAction SilentlyContinue | Stop-Process -Force
+	# vr-test.ps1 owns and stops only the child it launches.
 	try { $why = & $scenarios[$name] } catch { $why = "$_" }
 	if ($why) { Write-Output "FAIL ${name}: $why"; $failed++ } else { Write-Output "PASS $name" }
 }
