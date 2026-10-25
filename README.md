@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="hotd2-vr/assets/lupin-title.svg" alt="Lupin the Third VR — experimental Quest and PC VR port" width="100%" />
+<img src="hotd2-vr/assets/readme-banner.jpg" alt="Lupin the Third VR — experimental Quest and PC VR port" width="100%" />
 
 # Lupin the Third VR
 ### Sega NAOMI Light-Gun Adventure · Standalone Meta Quest & PC VR
