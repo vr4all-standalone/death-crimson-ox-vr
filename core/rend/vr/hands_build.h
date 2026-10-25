@@ -71,6 +71,9 @@ struct GunTarget
 	// the run's first part while its file is missing, before Start leaves the demo. Its file
 	// missing alone starts no run, and it's watched for in play as well (hands_rip.cpp).
 	float attractBy;
+	// Optional: select one spatially joined instance when a pass draws several copies.
+	// Distance between corners in game units; 0 keeps the existing whole-pass selection.
+	float instanceJoinDistance = 0.f;
 
 	bool used() const { return file != nullptr && file[0] != 0; }
 	bool has(uint32_t tex) const {

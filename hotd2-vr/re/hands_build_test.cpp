@@ -14,6 +14,7 @@
 	Copyright 2026 mikermak. This file is part of Flycast and is distributed under the GNU GPL v2 or later.
 */
 #include "hands_build.h"
+#include "hands_rip.h"
 
 #include <glm/glm.hpp>
 #include <algorithm>
@@ -587,6 +588,73 @@ int main()
 		c.check(r.model.ok && front < 0.05 && back > 0.08, "backwards: the front " + std::to_string(front) + " m high, the back "
 				+ std::to_string(back) + " m (want the barrel's 0.03 in front, the stock's 0.11 behind)");
 		c.done(r);
+	}
+
+	// One gun per capture even when a scene draws several copies of its textures. The grip
+	// and sight are separate meshes, and noisy copies of seam corners must stay together.
+	{
+		Case c("instance-complete-with-detached-parts");
+		const Shot all { lookAt(dvec3(6, 4, 4), dvec3(0, 0, -0.9)), [](const Quad&) { return true; }, 0.0, 1e-5 };
+		Rip two = capture(model, all);
+		Rip other = two;
+		for (RipPoly& p : other.polys)
+			for (RipVertex& v : p.v)
+				v.x += 6.f * v.z * other.focalX;
+		two.polys.insert(two.polys.end(), other.polys.begin(), other.polys.end());
+		GunTarget t = whole;
+		t.instanceJoinDistance = 0.22f;
+		const Result r = run({ two }, t);
+		c.check(r.built && r.complete, "not built complete: " + r.error + r.report.incomplete);
+		c.check(r.report.polys == n && r.model.sourcePolys == n, "several guns fused, or detached parts missing");
+		c.check(r.model.ok && r.model.flags == 3, "not a complete gun-only model");
+		c.done(r);
+	}
+	// A nearby incomplete copy is not enough, and must not be combined with the whole gun.
+	{
+		Case c("instance-prefers-whole-copy");
+		const Shot all { lookAt(dvec3(6, 4, 4), dvec3(0, 0, -0.9)), [](const Quad&) { return true; }, 0.0, 0.0 };
+		Rip partialGun = capture(model, all);
+		partialGun.polys.resize(partialGun.polys.size() - 5);
+		Rip other = capture(model, all);
+		for (RipPoly& p : other.polys)
+			for (RipVertex& v : p.v)
+				v.x += 6.f * v.z * other.focalX;
+		partialGun.polys.insert(partialGun.polys.end(), other.polys.begin(), other.polys.end());
+		GunTarget t = whole;
+		t.instanceJoinDistance = 0.22f;
+		const Result r = run({ partialGun }, t);
+		c.check(r.built && r.complete && r.report.polys == n, "did not select only the whole copy: " + r.error + r.report.incomplete);
+		c.check(r.model.sourcePolys == n, "source count does not describe one gun");
+		c.done(r);
+	}
+	// If two copies overlap, selecting both cannot earn a complete flag just because their
+	// combined count is larger than the target. Exact-count checks still apply.
+	{
+		Case c("instance-rejects-overlapping-copies");
+		const Shot all { lookAt(dvec3(6, 4, 4), dvec3(0, 0, -0.9)), [](const Quad&) { return true; }, 0.0, 0.0 };
+		Rip two = capture(model, all);
+		Rip other = two;
+		for (RipPoly& p : other.polys)
+			for (RipVertex& v : p.v)
+				v.x += 0.08f * v.z * other.focalX;
+		two.polys.insert(two.polys.end(), other.polys.begin(), other.polys.end());
+		GunTarget t = whole;
+		t.instanceJoinDistance = 0.22f;
+		const Result r = run({ two }, t);
+		c.check(!r.complete, "overlapping copies flagged complete");
+		c.check(!r.model.ok || (r.model.flags & ModelComplete) == 0, "complete model flag written");
+		c.done(r);
+	}
+
+	// A Lupin gun uses its own gun-slot cache, never the legacy hands.bin fallback.
+	{
+		Case c("lupin-cache-isolation");
+		Source source;
+		source.kind = Source::LupinGun;
+		source.file = "hands.bin";
+		source.guns[1].file = "gun-lp-pistol.bin";
+		c.check(std::string(source.modelFile()) == "gun-lp-pistol.bin", "Lupin routed to a legacy cache");
+		c.done(Result {});
 	}
 
 	printf("hands_build_test: %d passed, %d failed\n", passed, failed);

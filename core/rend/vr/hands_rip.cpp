@@ -89,6 +89,7 @@ std::atomic<bool> newModel, skipRequested;
 std::atomic<float> progress;
 std::atomic<bool> staffRun;	// the run is for the hero's staff
 std::atomic<bool> cmRun;	// ...for Confidential Mission's guns
+std::atomic<bool> lupinRun;	// ...for Lupin's neutral attract-sequence pistol
 // Confidential Mission's guns (Source::guns): made (or not wanted), and the pass a try at one
 // that isn't merged failed (gunMutex)
 std::atomic<bool> gunDone[3];
@@ -133,7 +134,7 @@ std::string gunPath(const GunTarget& gun) {
 bool haveModel()
 {
 	const Source *source = gameModelSource();
-	if (source != nullptr && source->kind == Source::CmGuns)
+	if (source != nullptr && source->gunModels())
 	{
 		// every gun's file (the agents' pistol's) but those from the attract demo (the assault
 		// rifle: its file missing alone starts no run, PF20; it's watched for in play). An old
@@ -199,6 +200,7 @@ void onStart()
 	if (source == nullptr || !config::VrGameHands)
 		return;
 	cmRun = source->kind == Source::CmGuns;
+	lupinRun = source->kind == Source::LupinGun;
 	const bool watchOnly = haveModel();
 	if (watchOnly)
 	{
@@ -219,7 +221,7 @@ void onStart()
 		for (int i = 0; i < 3; i++)
 		{
 			const GunTarget& gun = source->guns[i];
-			gunDone[i] = !cmRun || !gun.used() || file_exists(gunPath(gun));
+			gunDone[i] = !(cmRun || lupinRun) || !gun.used() || file_exists(gunPath(gun));
 			gunFailedAt[i] = 0;
 			std::vector<Rip>().swap(gunCaptures[i]);
 			gunSeen[i] = false;
@@ -266,6 +268,8 @@ void onStart()
 		NOTICE_LOG(RENDERER, "VR hands: no model yet, running the attract demo for the hero's staff (%s)", modelPath().c_str());
 	else if (cmRun)
 		NOTICE_LOG(RENDERER, "VR hands: no model yet, taking the guns from the game");
+	else if (lupinRun)
+		NOTICE_LOG(RENDERER, "VR hands: no model yet, watching the attract demo for the in-game pistol");
 	else
 		NOTICE_LOG(RENDERER, "VR hands: no model yet, running the game to its game over scene for it");
 }
@@ -291,12 +295,30 @@ void onVBlank()
 				if (source->guns[i].attractBy <= 0.f)
 					gunDone[i] = true;
 		}
-		stopPrep("skipped", cmRun && !watch ? Off : Watching);
+		stopPrep("skipped", lupinRun || (cmRun && !watch) ? Off : Watching);
 		if (watch)
 			logWatched(*source);
 		return;
 	}
 	const double now = gameSeconds() - startedAt;
+	if (lupinRun)
+	{
+		const Source *source = gameModelSource();
+		if (source == nullptr || source->kind != Source::LupinGun)
+		{
+			stopPrep("stopped", Off);
+			return;
+		}
+		const double limit = std::isfinite(source->prepSeconds) && source->prepSeconds > 0.f
+				? source->prepSeconds : 180.0;
+		progress = (float)std::min(now / limit, 0.97);
+		// No guessed Start timing: recognize the measured texture and complete geometry in
+		// whatever attract scene supplies them. The timeout is a bound, not a scene identity.
+		lightgunSet(0, OffScreen, OffScreen, 0);
+		if (now >= limit)
+			stopPrep("no complete in-game pistol appeared (gave up)", Watching);
+		return;
+	}
 	if (cmRun)
 	{
 		const Source *source = gameModelSource();
@@ -688,7 +710,7 @@ void observeGuns(const rend_context& ctx, const RenderPass& pass, const RenderPa
 		const GunTarget& gun = source.guns[i];
 		if (gunDone[i])
 			continue;
-		if (gun.merge)
+		if (gun.merge && source.kind != Source::LupinGun)
 		{
 			// only in the run, from the stage 1 intro's part of it on
 			if (state == Preparing && cmCapturing && !gunOver[i])
@@ -784,7 +806,7 @@ void observePass(const rend_context& ctx, const RenderPass& pass, const RenderPa
 	const Source *source = gameModelSource();
 	if (state == Off || source == nullptr)
 		return;
-	if (source->kind == Source::CmGuns)
+	if (source->gunModels())
 	{
 		observeGuns(ctx, pass, prev, *source);
 		return;

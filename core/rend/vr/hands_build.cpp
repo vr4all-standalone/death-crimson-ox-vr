@@ -254,6 +254,55 @@ std::vector<Polys> clusters(const Rip& rip, const Polys& polys, double scale = 1
 	return groups;
 }
 
+// A scene can draw the same textured gun on several characters. Join its nearby pieces
+// in eye space (the grip/sights can be separate meshes), then keep one instance. Euclidean
+// distance avoids splitting duplicate seam corners across a quantization-cell boundary.
+Polys largestInstance(const Rip& rip, const Polys& polys, double distance)
+{
+	if (!(distance > 0.0) || !std::isfinite(distance) || polys.empty())
+		return polys;
+	std::vector<size_t> parent(polys.size());
+	std::iota(parent.begin(), parent.end(), 0);
+	auto find = [&](size_t i) {
+		while (parent[i] != i)
+		{
+			parent[i] = parent[parent[i]];
+			i = parent[i];
+		}
+		return i;
+	};
+	std::vector<std::vector<dvec3>> vertices;
+	for (const RipPoly *p : polys)
+		vertices.push_back(eye(rip, *p));
+	const double limit = distance * distance;
+	for (size_t i = 0; i < polys.size(); i++)
+		for (size_t j = 0; j < i; j++)
+		{
+			if (find(i) == find(j))
+				continue;
+			bool near = false;
+			for (const dvec3& a : vertices[i])
+			{
+				for (const dvec3& b : vertices[j])
+					if (glm::dot(a - b, a - b) <= limit)
+					{
+						near = true;
+						break;
+					}
+				if (near)
+					break;
+			}
+			if (near)
+				parent[find(i)] = find(j);
+		}
+	std::vector<Polys> groups(polys.size());
+	for (size_t i = 0; i < polys.size(); i++)
+		groups[find(i)].push_back(polys[i]);
+	return *std::max_element(groups.begin(), groups.end(), [](const Polys& a, const Polys& b) {
+		return a.size() < b.size();
+	});
+}
+
 dvec3 surfaceCentre(const Tris& tris)
 {
 	dvec3 sum(0.0);
@@ -1781,7 +1830,7 @@ bool buildGun(const std::vector<Rip>& captures, const GunTarget& target, const T
 			if (good)
 				polys.push_back(&p);
 		}
-		return polys;
+		return largestInstance(rip, polys, target.instanceJoinDistance);
 	};
 	const Rip *rip = nullptr;
 	Polys polys;
