@@ -1,17 +1,17 @@
 <#
-  Builds Confidential Mission VR for the Quest and the PC and puts what goes on the Releases page
-  in dist\:
+  Packages Lupin the Third VR builds for the Quest and PC (implementation remains in progress)
+  in dist\ (packaging checks do not establish gameplay or headset validation):
 
-    confidential-mission-vr-quest.apk   the Quest app (Quest 3, 3S, 2, Pro)
-    confidential-mission-vr-pcvr.zip    the PC version with VR on (flycast.exe, emu.cfg, README.txt,
-                                        LICENSE.txt, Play Confidential Mission.cmd; with the bundled
+    lupin-the-third-vr-quest.apk   the Quest app (Quest 3, 3S, 2, Pro)
+    lupin-the-third-vr-pcvr.zip    the PC version with VR on (flycast.exe, emu.cfg, README.txt,
+                                        LICENSE.txt, Play Lupin the Third.cmd; with the bundled
                                         models also CREDITS.txt and data\models\)
 
   Neither holds anything of the game: the players bring their own, and what the app makes from it
   is made on the spot. Both are checked for that (the names in their file lists: discs, keys,
   rips, frame grabs, models made from a game), and the APK for its signer: signed with the public
   debug key (no release key, see make-release-key.ps1) it is refused, since anyone could sign an
-  "update" of the app with that key. The APK is also checked for being Confidential Mission VR
+  "update" of the app with that key. The APK is also checked for being Lupin the Third VR
   (its package, version and label, and its start screen the only entry in the headset's library),
   and the zip for holding exactly its files, with a README.txt that names no other game.
 
@@ -29,7 +29,7 @@
   (core\deps\cgltf\LICENSE) in it; -CheckOnly checks that too.
 
   A release is built from a commit, the one its published source is: the working tree must be
-  clean (the gamesdk submodule's local change aside), and the APK's versionName (1.2.0-g<commit>),
+  clean (the gamesdk submodule's local change aside), and the APK's versionName (1.0.0-g<commit>),
   its libflycast.so and flycast.exe must all name HEAD (a -SkipBuild after a new commit fails
   that). -AllowDebugKey test builds skip both checks.
 
@@ -50,18 +50,18 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 # The app: its application ID, label and version (shell\android-studio\flycast\build.gradle.kts and
 # src\vr\AndroidManifest.xml), its library entry, and the PC zip's start script (hotd2-vr\assets).
-$appId = 'com.vrlightgunhub.confmiss'
-$appLabel = 'Confidential Mission VR'
-$appVersion = '1.2.0'
-$appLauncher = 'com.flycast.emulator.CmStartActivity'
-$playCmd = 'Play Confidential Mission.cmd'
+$appId = 'com.vrlightgunhub.lupin'
+$appLabel = 'Lupin the Third VR'
+$appVersion = '1.0.0'
+$appLauncher = 'com.flycast.emulator.LupinStartActivity'
+$playCmd = 'Play Lupin the Third.cmd'
 
 # What must never be in a release: game discs and keys, rips (rip\), frame grabs, models made
 # from a game (the app makes those on the player's device, from the player's game), and archives
-# or disc images inside it (a ROM set, a BIOS zip): neither the APK nor the zip holds one.
+# or disc images inside it (a ROM set, a BIOS zip). Signing material stays private too.
 $bannedNames = '*.chd', '*.gdi', '*.cue', '*.cdi', '*.pic', 'shot_*.png', 'hands*.bin', 'staff*.bin', 'HND1*.bin',
-	'gun-*.bin', '*.zip', '*.7z', '*.rar', '*.iso'
-$bannedDirs = 'rip'
+	'gun-*.bin', '*.zip', '*.7z', '*.rar', '*.iso', '*.jks', '*.keystore', 'release-signing.properties'
+$bannedDirs = 'rip', '.vrlightgunhub'
 
 # The entries of a zip or APK whose names are on the lists above.
 function Find-GameData([string]$archive) {
@@ -127,10 +127,10 @@ function Test-Archives([string[]]$archives) {
 		$hits = @(Find-GameData $a)
 		if ($hits.Count) {
 			$bad = $true
-			Write-Host "$a holds what may be game data, not released:" -ForegroundColor Red
+			Write-Host "$a holds possible game data or private signing material, not released:" -ForegroundColor Red
 			$hits | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
 		} else {
-			Write-Host "content check: $(Split-Path -Leaf $a) has no game data names"
+			Write-Host "content check: $(Split-Path -Leaf $a) has no game-data or signing-material names"
 		}
 		$uncredited = @(Find-UncreditedModels $a)
 		if ($uncredited.Count) {
@@ -188,7 +188,7 @@ function Read-ZipEntry([string]$archive, [string]$name) {
 
 # A built binary names this commit: the version core\version.h gave it (v<tag>-<n>-g<commit>).
 function Test-NamesCommit([string]$what, [byte[]]$bytes, [string]$hash) {
-	if ($bytes -and [Text.Encoding]::ASCII.GetString($bytes).Contains("-g$hash")) {
+	if ($bytes -and [Text.Encoding]::ASCII.GetString($bytes) -match ([regex]::Escape("-g$hash") + '(?![0-9a-fA-F])')) {
 		Write-Host "version check: $what names $hash"
 		return $true
 	}
@@ -217,6 +217,53 @@ function Get-LauncherOwners([string[]]$tree) {
 	}
 }
 
+# Pure metadata checks, also exercised by package-release-tests.ps1 with synthetic aapt output.
+function Find-AppIdentityFault([string[]]$badgingLines, [string[]]$manifestTree, [string]$shortHash, [bool]$testBuild) {
+    $badging = $badgingLines | Where-Object { $_ -match '^package:' } | Select-Object -First 1
+    $wantVersion = [regex]::Escape("$appVersion-g") + $(if ($testBuild) { '[0-9a-f]+' } else { [regex]::Escape($shortHash) })
+    if ($badging -notmatch "^package: name='$([regex]::Escape($appId))'") { "the package is not $appId" }
+    if ($badging -notmatch "versionCode='1'") { 'the versionCode is not 1' }
+    if ($badging -notmatch "versionName='$wantVersion'") {
+        "the versionName is not $appVersion-g$(if ($testBuild) { '<commit>' } else { $shortHash })"
+    }
+    if ($badgingLines -notcontains "application-label:'$appLabel'") { "the label is not '$appLabel'" }
+    $launchers = @(Get-LauncherOwners $manifestTree)
+    if ($launchers.Count -ne 1 -or $launchers[0] -ne $appLauncher) {
+        "the library entries (LAUNCHER) are '$($launchers -join "', '")', not $appLauncher alone"
+    }
+    if (@($manifestTree | Where-Object { $_ -match 'VrSetupActivity|CmStartActivity' }).Count) { 'the manifest still has an older setup activity' }
+    if (-not @($manifestTree | Where-Object { $_ -match '"com\.oculus\.permission\.RENDER_MODEL"' }).Count) {
+        'the manifest has no com.oculus.permission.RENDER_MODEL (the controllers drawn in the hands)'
+    }
+}
+
+function Find-PcArchiveFault([string]$archive, [string[]]$expectedFiles) {
+    $z = [IO.Compression.ZipFile]::OpenRead($archive)
+    try { $inZip = @($z.Entries | Where-Object { $_.Name } | ForEach-Object { $_.FullName }) } finally { $z.Dispose() }
+    $extra = @($inZip | Where-Object { $expectedFiles -notcontains $_ })
+    $lacking = @($expectedFiles | Where-Object { $inZip -notcontains $_ })
+    $duplicates = @($inZip | Group-Object | Where-Object { $_.Count -gt 1 })
+    if ($extra.Count -or $lacking.Count -or $duplicates.Count) {
+        "$(Split-Path -Leaf $archive) must hold exactly $($expectedFiles -join ', '); also has: $($extra -join ', '); lacks: $($lacking -join ', '); duplicates: $($duplicates.Name -join ', ')"
+    }
+    $readmeBytes = Read-ZipEntry $archive 'README.txt'
+    $readme = if ($readmeBytes) { [Text.Encoding]::ASCII.GetString($readmeBytes) } else { '' }
+    foreach ($required in @($appLabel, 'roms\lupinshoo.zip', 'roms\lupinshoo\gds-0018.chd', 'roms\naomi.zip', $playCmd)) {
+        if (-not $readme.Contains($required)) { "README.txt does not name $required" }
+    }
+    foreach ($other in @('Light Gun Hub', 'House of the Dead', 'Maze of the Kings', 'Confidential Mission')) {
+        if ($readme -match [regex]::Escape($other)) { "README.txt names $other; its play instructions must be for $appLabel" }
+    }
+    $configBytes = Read-ZipEntry $archive 'emu.cfg'
+    $config = if ($configBytes) { [Text.Encoding]::ASCII.GetString($configBytes) } else { '' }
+    foreach ($setting in @('pvr\.rend\s*=\s*0', 'rend\.NativeDepthInterpolation\s*=\s*yes', 'vr\.Xr\s*=\s*yes')) {
+        if ($config -notmatch "(?m)^\s*$setting\s*$") { "emu.cfg lacks portable VR default $setting" }
+    }
+    $launcherBytes = Read-ZipEntry $archive $playCmd
+    $launcher = if ($launcherBytes) { [Text.Encoding]::ASCII.GetString($launcherBytes) } else { '' }
+    if ($launcher -notmatch 'start\s+""\s+/D\s+"%~dp0"' -or -not $launcher.Contains('"%~dp0flycast.exe"') -or
+        -not $launcher.Contains('"%~dp0roms\lupinshoo.zip"')) { "$playCmd does not launch the original set with a portable working directory" }
+}
 # the working tree as committed (the gamesdk submodule's local change aside)
 $head = Invoke-Git rev-parse HEAD
 if (-not $AllowDebugKey) {
@@ -254,9 +301,9 @@ if (-not $SkipBuild) {
 	if ($LASTEXITCODE -ne 0) { throw 'build-quest.cmd failed' }
 }
 New-Item -ItemType Directory -Force $dist | Out-Null
-$apkOut = Join-Path $dist 'confidential-mission-vr-quest.apk'
-$zip = Join-Path $dist 'confidential-mission-vr-pcvr.zip'
-$stage = Join-Path $dist 'confidential-mission-vr-pcvr'
+$apkOut = Join-Path $dist 'lupin-the-third-vr-quest.apk'
+$zip = Join-Path $dist 'lupin-the-third-vr-pcvr.zip'
+$stage = Join-Path $dist 'lupin-the-third-vr-pcvr'
 foreach ($f in $apkOut, $zip) { if (Test-Path $f) { (Get-Item $f).Delete() } }   # never leave an old one
 
 # the Quest app: who signed it
@@ -291,24 +338,9 @@ if ($digests -contains $debugDigest) {
 	}
 	Write-Host 'Signed with the public debug key: a test build, do not publish it.' -ForegroundColor Yellow
 }
-# the app it is: Confidential Mission VR's package, version and label, with its start screen the
-# only entry in the headset's library (the VR activity is started from it) and no hub panel left
+# The app's identity and sole library entry, checked before copying any release output.
 $short = Invoke-Git rev-parse --short HEAD
-$wantVersion = [regex]::Escape("$appVersion-g") + $(if ($AllowDebugKey) { '[0-9a-f]+' } else { [regex]::Escape("$short") })
-$launchers = @(Get-LauncherOwners $manifestTree)
-$wrong = @()
-if ($badging -notmatch "^package: name='$([regex]::Escape($appId))'") { $wrong += "the package is not $appId" }
-if ($badging -notmatch "versionName='$wantVersion'") {
-	$wrong += "the versionName is not $appVersion-g$(if ($AllowDebugKey) { '<commit>' } else { $short })"
-}
-if ($badgingAll -notcontains "application-label:'$appLabel'") { $wrong += "the label is not '$appLabel'" }
-if (-not $launchers.Count -or @($launchers | Where-Object { $_ -ne $appLauncher }).Count) {
-	$wrong += "the library entries (LAUNCHER) are '$($launchers -join "', '")', not $appLauncher alone"
-}
-if (@($manifestTree | Where-Object { $_ -match 'VrSetupActivity' }).Count) { $wrong += 'the manifest still has VrSetupActivity' }
-if (-not @($manifestTree | Where-Object { $_ -match '"com\.oculus\.permission\.RENDER_MODEL"' }).Count) {
-	$wrong += 'the manifest has no com.oculus.permission.RENDER_MODEL (the controllers drawn in the hands)'
-}
+$wrong = @(Find-AppIdentityFault $badgingAll $manifestTree $short ([bool]$AllowDebugKey))
 if ($wrong.Count) {
 	Write-Host "The APK is not $appLabel as released:" -ForegroundColor Red
 	$wrong | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
@@ -332,7 +364,10 @@ if (-not $AllowDebugKey) {
 Copy-Item $apk $apkOut
 
 # the PC version: VR on, OpenGL (the only renderer VR draws with)
-if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+$stage = [IO.Path]::GetFullPath($stage)
+$distPrefix = [IO.Path]::GetFullPath($dist) + [IO.Path]::DirectorySeparatorChar
+if (-not $stage.StartsWith($distPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Release staging path escaped dist' }
+if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage | Out-Null
 Copy-Item (Join-Path $repo 'build-win\flycast.exe') $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "assets\$playCmd") $stage
@@ -377,40 +412,43 @@ rend.NativeDepthInterpolation = yes
 vr.Xr = yes
 '@
 $readme = @'
-Confidential Mission VR, PC version
+Lupin the Third VR, PC development build
 
-Sega's light-gun game Confidential Mission (arcade, Sega NAOMI, 2000) in VR. The original game
-runs in the Flycast emulator; its 3D scenes are rebuilt around you and your controller is the
-light gun. Built on mikermak's hotd2-vr (https://github.com/mikermak/hotd2-vr).
+Implementation in progress. Camera, aiming/HUD, player/weapon state and in-game gun model
+research are not complete. Full feature parity and physical headset validation are pending.
+This build inherits Flycast and mikermak's hotd2-vr (https://github.com/mikermak/hotd2-vr).
+Check the source README and Lupin findings for the current verified scope.
 
-1. Make a folder named roms next to flycast.exe and put your own copy of the game in it, the
-   MAME set confmiss:
-     roms\confmiss.zip            the game, with its key inside
-     roms\confmiss\gds-0001.chd   the disc, in a folder named confmiss
-     roms\naomi.zip               the NAOMI BIOS (or have the BIOS inside confmiss.zip)
-2. Connect your VR headset: start SteamVR, Quest Link / Air Link or Virtual Desktop, so it
-   is the active OpenXR runtime.
-3. Double-click "Play Confidential Mission.cmd". The game plays in the headset.
+1. Make a folder named roms next to flycast.exe and add your own original MAME set lupinshoo:
+     roms\lupinshoo.zip             the original game, with 317-0325-jpn.pic inside
+     roms\lupinshoo\gds-0018.chd    original GDS-0018 disc
+     roms\naomi.zip                 supported NAOMI BIOS, or its BIOS file in lupinshoo.zip
+   A complete gds-0018.cue or gds-0018.gdi with all its tracks may replace the CHD.
+   Raw CUE/GDI boot is untested. Rev A uses lupinsho/gds-0018a and is not supported.
+   The original CHD header SHA1 is 3b7d5dd917b9a2cc9b7b51aad22f8e75383c3301.
+   Keep original files untouched; use a separate correctly named copy for this app.
+2. Connect the headset to the active OpenXR runtime (for example SteamVR or Quest Link).
+3. Double-click "Play Lupin the Third.cmd". It starts flycast.exe with roms\lupinshoo.zip
+   and the archive folder as its working directory, so this copy uses its own emu.cfg.
 
-The controller is the light gun (Quest Touch): the trigger shoots, A is Start and B reloads.
-X is player 2's Start: player 2 joins with a gun in your left hand, and Y reloads that one.
-Shooting away from the game's view reloads too. The left menu button opens the settings menu;
-a click on the left thumbstick recenters, one on the right thumbstick turns the laser off or
-on. The project's readme has the other controllers and the rest. Without a headset the game
-plays in the window. Settings are in emu.cfg (vr.Xr = yes is VR).
+Inherited controls to validate in Lupin: trigger shoots, A is P1 Start, B is P1 Reload;
+X is P2 Start and Y is P2 Reload. Left Menu opens settings, left stick click recenters,
+right stick click toggles the laser. Game-specific aiming, reloads, actual-shot feedback,
+P2 lifecycle, cutscenes and extraction are research work, not verified parity claims.
+Without an OpenXR headset, use the desktop window for development. emu.cfg enables VR
+(vr.Xr = yes), OpenGL (pvr.rend = 0) and native depth interpolation.
 
-No game is included: you need your own copy. Unofficial fan project, not affiliated with
-Sega.
+No game is included. Unofficial fan project, not affiliated with Sega.
 
 Credits: Flycast by flyinghead and contributors (https://github.com/flyinghead/flycast,
-GPL-2.0-or-later). hotd2-vr by mikermak, which this app is built on (GPL-2.0-or-later).
+GPL-2.0-or-later). hotd2-vr by mikermak (GPL-2.0-or-later).
 The gun: "Namco Arcade Gun" by Martoscar
 (https://sketchfab.com/3d-models/namco-arcade-gun-15fbd5b9add94a34b5c21746e3dd32be), CC BY 4.0
 (https://creativecommons.org/licenses/by/4.0/); changed: re-oriented, quantised, textures and
 materials dropped, recoloured, converted to C++. The OpenXR loader by Khronos, Apache-2.0.
 
-Licence: this build is distributed under the GNU GPL version 3 (LICENSE.txt). Its source code
-is published with every release, on the same page as this zip.
+Licence: this build is distributed under the GNU GPL version 3 (LICENSE.txt). A distributed
+build must be accompanied by the corresponding source for its recorded commit.
 '@
 if ($modelFiles.Count) {
 	$readme = $readme -replace '(?m)^Licence: this build', ("The other guns and the controllers, in data\models, are 3D models made by others, under their`n" +
@@ -433,26 +471,15 @@ try {
 	}
 } finally { $archive.Dispose(); $out.Dispose() }
 
-# the zip: exactly its files (the bundled models' too), and a README.txt about this game alone
+# The zip contains exactly its files, portable defaults and launcher, and Lupin's own instructions.
 $zipFiles = @('flycast.exe', 'emu.cfg', 'README.txt', 'LICENSE.txt', $playCmd) + $modelFiles
-$z = [IO.Compression.ZipFile]::OpenRead($zip)
-try { $inZip = @($z.Entries | Where-Object { $_.Name } | ForEach-Object { $_.FullName }) } finally { $z.Dispose() }
-$extra = @($inZip | Where-Object { $zipFiles -notcontains $_ })
-$lacking = @($zipFiles | Where-Object { $inZip -notcontains $_ })
-$readmeText = if ($lacking -notcontains 'README.txt') { [Text.Encoding]::ASCII.GetString((Read-ZipEntry $zip 'README.txt')) } else { '' }
-$otherNames = @('Light Gun Hub', 'House of the Dead', 'Maze of the Kings' | Where-Object { $readmeText -match [regex]::Escape($_) })
-$zipGood = $true
-if ($extra.Count -or $lacking.Count) {
-	Write-Host ("$(Split-Path -Leaf $zip) must hold exactly $($zipFiles -join ', '); also has: $($extra -join ', '); " +
-		"lacks: $($lacking -join ', ')") -ForegroundColor Red
-	$zipGood = $false
-} elseif ($otherNames.Count) {
-	Write-Host "README.txt names $($otherNames -join ', '): it is about $appLabel alone" -ForegroundColor Red
-	$zipGood = $false
+$zipFaults = @(Find-PcArchiveFault $zip $zipFiles)
+$zipGood = $zipFaults.Count -eq 0
+if ($zipGood) {
+    Write-Host "zip check: $(Split-Path -Leaf $zip) holds exactly $($zipFiles -join ', '), with Lupin instructions and portable defaults"
 } else {
-	Write-Host "zip check: $(Split-Path -Leaf $zip) holds exactly $($zipFiles -join ', '); README.txt names no other game"
+    $zipFaults | ForEach-Object { Write-Host "zip check: $_" -ForegroundColor Red }
 }
-
 if (-not (Test-Archives $apkOut, $zip) -or -not $zipGood -or -not $modelsGood) {
 	foreach ($f in $apkOut, $zip) { if (Test-Path $f) { (Get-Item $f).Delete() } }
 	exit 1

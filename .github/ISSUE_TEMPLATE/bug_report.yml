@@ -1,4 +1,4 @@
-name: Bug report (Confidential Mission VR)
+name: Bug report (Lupin the Third VR)
 description: Something doesn't work in the Quest app or the PCVR build
 labels: [bug]
 body:
@@ -6,7 +6,8 @@ body:
     attributes:
       value: |
         Thanks for testing! A few details help a lot: most problems depend on the headset, the build and the game version.
-        Please don't attach or link game files: everyone uses their own copy.
+        This port is in progress; identify the build commit and the original disc revision.
+        Rev A (lupinsho/gds-0018a) is not supported. Please don't attach or link game files.
   - type: dropdown
     id: build
     attributes:
@@ -20,7 +21,7 @@ body:
     id: version
     attributes:
       label: App version
-      description: "The release you downloaded, e.g. 1.1.0 (on the Quest also in Settings > Apps > Installed apps > Confidential Mission VR)"
+      description: "The build you tested, e.g. 1.0.0-gabc1234 (on the Quest also in Settings > Apps > Installed apps > Lupin the Third VR)"
     validations:
       required: true
   - type: input
@@ -35,14 +36,14 @@ body:
     attributes:
       label: Game
       options:
-        - Confidential Mission (NAOMI, the MAME set confmiss)
+        - Lupin the Third - The Shooting (original GDS-0018, MAME set lupinshoo)
     validations:
       required: true
   - type: input
     id: format
     attributes:
       label: Game files
-      description: The disc in the confmiss folder (gds-0001.chd, .cue or .gdi), and the BIOS (naomi.zip, or inside confmiss.zip)
+      description: The disc in the lupinshoo folder (gds-0018.chd, .cue or .gdi), and the BIOS (naomi.zip, or inside lupinshoo.zip)
   - type: textarea
     id: what
     attributes:
