@@ -109,8 +109,7 @@ rend.NativeDepthInterpolation = yes
 vr.Xr = yes
 ```
 
-This selects OpenGL, native depth interpolation and VR. Final portable-launch and actual
-OpenXR headset testing remain pending. There is no measured Lupin world-scale recommendation
+This selects OpenGL, native depth interpolation and VR. Portable configuration and native standalone selection are checked; actual OpenXR headset use remains untested. There is no measured Lupin world-scale recommendation
 or headset performance result yet.
 
 ## Controls and parity target
