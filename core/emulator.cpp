@@ -19,6 +19,7 @@
  */
 #include "rend/vr/xr_host.h"
 #include "emulator.h"
+#include "standalone_game.h"
 #include "types.h"
 #include "stdclass.h"
 #include "cfg/option.h"
@@ -653,6 +654,10 @@ void Emulator::loadGame(const char *path, LoadProgress *progress)
 			// Reload the BIOS in case a game-specific region is set
 			naomi_cart_LoadBios(path);
 		}
+		// Media identification is complete: Naomi's cartridge loader has read the boot ID.
+		// Reject other games through the usual load-error path before devices/Start/run.
+		if (const char *error = vr::standaloneGameError(settings.content.gameId))
+			throw FlycastException(error);
 		mcfg_DestroyDevices();
 		mcfg_CreateDevices();
 		if (settings.platform.isNaomi())

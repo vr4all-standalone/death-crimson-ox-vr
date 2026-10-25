@@ -115,6 +115,7 @@ android {
                 cmake {
                     arguments += "-DCMAKE_BUILD_TYPE=Release"
                     arguments += "-DUSE_OPENXR=ON"
+                    arguments += "-DVR_STANDALONE_LUPIN=ON"
                 }
             }
             // The Quest is arm64. (Not with -Pandroid.injected.build.abi: that's the IDE's
