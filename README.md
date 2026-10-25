@@ -13,8 +13,6 @@
 
 **[🌐 VR4ALL — Standalone VR Mod Installer](https://github.com/vr4all-standalone/vr4all-standalone-vr-mod-installer)**
 
-[Download the Lupin-enabled VR4ALL Windows build](../../releases/latest/download/VR4ALL-0.3.25-lupin-win-x64.exe)
-
 </div>
 
 ---
@@ -90,9 +88,8 @@ Allow USB debugging on the headset. If you already use VR4ALL or SideQuest, this
 
 ### 2. Install with VR4ALL
 
-**[Get the Lupin-enabled VR4ALL Windows build](../../releases/latest/download/VR4ALL-0.3.25-lupin-win-x64.exe)**,
-open it, select **Lupin the Third VR** and provide your own three files above. If Lupin
-is missing from an older VR4ALL library, open this updated build.
+**[Get VR4ALL](https://github.com/vr4all-standalone/vr4all-standalone-vr-mod-installer)**,
+open the latest build, select **Lupin the Third VR** and provide your own three files above.
 
 VR4ALL downloads the Quest APK, installs it, enables All files access and copies your
 files to the correct folders. It does not supply the game or BIOS.
