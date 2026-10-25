@@ -7,6 +7,8 @@
   .\hotd2-vr\vr-test.ps1 -Game mok -Seconds 90 -At '30=start','70=fire 0 5000 5000','72=shot','75=rip 1 1 1'
   .\hotd2-vr\vr-test.ps1 -Game $env:VRLGH_HOTD2 -Config 'config:vr.FovScale=3'
 
+  -Port     private UDP input port (default 27026); never shared with the reference tests.
+  -Visible  show the interactive research window for window captures; hidden by default.
   -Game     a MAME set name, as <set>.zip in $env:VRLGH_GAMES (with its CHD in <set>\ and
             naomi.zip), or the path of a disc image (its gun in port A).
   -At       "<seconds>=<action>", seconds from Flycast's start (checked before the run):
@@ -74,17 +76,25 @@ param(
 	[string[]]$Reject = @(),
 	[string[]]$On = @(),
 	[switch]$Xr,
-	[switch]$XrSim
+	[switch]$XrSim,
+    [ValidateRange(1024, 65535)][int]$Port = 27026,
+    [switch]$Visible
 )
 $ErrorActionPreference = 'Stop'
 # the run's folder gets emptied: nothing that could reach out of build-win\vrtest
 if (-not $Name -or $Name -match '^\.+$|\.\.|[\\/:*?\[\]]') { throw "-Name '$Name': want a plain folder name" }
 $repo = Split-Path -Parent $PSScriptRoot
-$exe = Join-Path $repo 'build-win\flycast.exe'
+$buildExe = Join-Path $repo 'build-win\flycast.exe'
+$exe = Join-Path $repo 'build-win\lupin-vr-player.exe'
+if (-not (Test-Path -LiteralPath $buildExe)) { throw 'Build the Windows version first: hotd2-vr\build-win.cmd' }
+# A distinct name also protects this run from older external harnesses that stop every flycast.exe.
+Copy-Item -LiteralPath $buildExe -Destination $exe -Force
 if (-not (Test-Path $exe)) { throw "Build the Windows version first: hotd2-vr\build-win.cmd" }
-$out = Join-Path $repo "build-win\vrtest\$Name"
+$runRoot = [IO.Path]::GetFullPath((Join-Path $repo 'build-win\vrtest')) + [IO.Path]::DirectorySeparatorChar
+$out = [IO.Path]::GetFullPath((Join-Path $runRoot $Name))
+if (-not $out.StartsWith($runRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'Run output is outside build-win\vrtest.' }
 $dataDir = Join-Path $repo 'build-win\data'	# Flycast's writable data dir (winmain.cpp), where DebugShots go
-$port = 27016
+# Port is supplied by the private -Port parameter (default 27026).
 
 # OpenGL with native depth and the reprojection on: what the VR hooks need. Never the
 # vr.ProjAddr/ViewportAddr overrides: they would beat the game's profile.
@@ -185,8 +195,7 @@ function Save-WindowShot($proc, $file) {
 	return $true
 }
 
-$old = @(Get-Process flycast -ErrorAction SilentlyContinue)
-if ($old) { $old | Stop-Process -Force; Start-Sleep -Milliseconds 500 }
+# Stop only $p, the process launched by this invocation, in finally below.
 if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 if ($DebugShots -gt 0) { Get-ChildItem $dataDir -Filter 'shot_*.png' -ErrorAction SilentlyContinue | Remove-Item }
@@ -285,7 +294,7 @@ $tailChars = New-Object char[] 65536
 $tailDecoder = [Text.Encoding]::UTF8.GetDecoder()	# one across reads: a character split between two keeps its bytes
 $partial = ''
 try {
-	$p = Start-Process -FilePath $exe -ArgumentList @('-config', "`"$cfg`"", "`"$content`"") -WorkingDirectory $out -PassThru
+	$p = Start-Process -FilePath $exe -ArgumentList @('-config', "`"$cfg`"", "`"$content`"") -WorkingDirectory $out -WindowStyle $(if ($Visible) { 'Normal' } else { 'Hidden' }) -PassThru
 	$null = $p.Handle	# (held from the start: without it ExitCode can be empty once it has exited)
 	$clock = [Diagnostics.Stopwatch]::StartNew()
 	$udp = New-Object System.Net.Sockets.UdpClient
@@ -389,3 +398,4 @@ if ($null -ne $early) {
 	exit 2
 }
 exit $(if ($failed) { 1 } else { 0 })
+
