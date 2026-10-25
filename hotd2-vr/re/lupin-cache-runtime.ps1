@@ -1,5 +1,5 @@
 ﻿# Private clone-only cache/runtime check. Default describes work; -Run requires root's exclusive slot.
-param([switch]$Run,[string]$Games = $env:VRLGH_GAMES)
+param([switch]$Run,[string]$Games = $env:VRLGH_GAMES,[switch]$RendererRejectedOnly)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $repo=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
@@ -10,7 +10,10 @@ $cache=[IO.Path]::GetFullPath((Join-Path $repo 'build-win\data\gun-lp-pistol.bin
 $part=$cache+'.part'
 $build=[IO.Path]::GetFullPath((Join-Path $repo 'build-win'))+'\'
 if (-not $cache.StartsWith($build,[StringComparison]::OrdinalIgnoreCase)) { throw 'Cache is outside clone.' }
-if (-not $Run) { Write-Output 'Plan: licensed fixture; valid orphan .part + skip86s; retry35s; cached Zapper7s; truncated cache recovery35s; restore original cache/models in finally.';return }
+if (-not $Run) {
+    Write-Output $(if($RendererRejectedOnly){'Plan: licensed fixture; flags1+skip7s; NaN-muzzle+skip7s; valid-pistol7s; restore original cache/models in finally.'}else{'Plan: licensed fixture; valid orphan .part + skip86s; retry35s; cached Zapper7s; truncated cache recovery35s; restore original cache/models in finally.'})
+    return
+}
 if(-not $Games -or -not(Test-Path -LiteralPath (Join-Path $Games 'lupinshoo.zip') -PathType Leaf)){throw 'Supply -Games (or VRLGH_GAMES) with the supported original Lupin set and BIOS.'}
 $players=@(Get-CimInstance Win32_Process -Filter "Name = 'lupin-vr-player.exe'")
 if ($players.Count) { throw 'A clone player is running; obtain the exclusive slot first.' }
@@ -42,6 +45,25 @@ try {
     if($hadPart){Move-Item -LiteralPath $part -Destination $originalPart;$partMoved=$true}
     $cacheScopeStarted=$true
     if($hadCache){Copy-Item -LiteralPath $original -Destination $part}else{[IO.File]::WriteAllBytes($part,[byte[]](72,78,68,49))}
+    if($RendererRejectedOnly) {
+        if(-not $hadCache){throw 'Rejected-renderer cases require a complete preexisting Lupin pistol cache.'}
+        $good=[IO.File]::ReadAllBytes($original)
+        if($good.Length -lt 112 -or $good.Length -gt 16777216 -or [Text.Encoding]::ASCII.GetString($good,0,4) -ne 'HND1' -or [BitConverter]::ToUInt32($good,4) -ne 2 -or [BitConverter]::ToUInt32($good,100) -ne 3 -or [BitConverter]::ToUInt32($good,104) -ne 24){throw 'Baseline cache does not have the expected complete Lupin header.'}
+        $bad=[byte[]]$good.Clone()
+        [Array]::Copy([BitConverter]::GetBytes([uint32]1),0,$bad,100,4)
+        [IO.File]::WriteAllBytes($cache,$bad)
+        $expectRejected=@('VR hands: no model yet, watching the attract demo','VR hands: skipped after','XR: gun: Arcade gun')
+        $rejectLoaded=@("XR: the game's own model from .*gun-lp-pistol.bin",'XR: gun: in-game pistol','VR hands: done after')
+        $skipActions=@('2=xr right/b 1 200','3=xr right/trigger/value 1 200','5=shot rejected-arcade')
+        Invoke-Case 'lp-cache-incomplete-skip-real' 7 '' $skipActions @() $expectRejected $rejectLoaded
+        $bad=[byte[]]$good.Clone()
+        [Array]::Copy([BitConverter]::GetBytes([uint32]2143289344),0,$bad,8,4) # quiet NaN in muzzle.x
+        [IO.File]::WriteAllBytes($cache,$bad)
+        Invoke-Case 'lp-cache-nan-skip-real' 7 '' $skipActions @() $expectRejected $rejectLoaded
+        [IO.File]::WriteAllBytes($cache,$good)
+        Invoke-Case 'lp-cache-valid-pistol-real' 7 '' @('2=xr right/trigger/value 1 200','4=shot valid-pistol') @() @('VR hands: .*made before:','XR: gun: in-game pistol') @('VR hands: no model yet,','VR hands: done after')
+        Write-Output 'PASS renderer rejects incomplete/NaN Lupin caches after skip and accepts the complete pistol.'
+    } else {
     Invoke-Case 'lp-cache-skip-real' 86 '' @('2=xr right/b 1 200','3=shot skipped','83=xr right/trigger/value 1 200','85=shot arcade-real') @() @('VR hands: no model yet, watching the attract demo','VR hands: skipped after','XR: own gun bundled models/guns/namco.glb offered:') @('the in-game pistol from this game,','VR hands: done after')
     if(Test-Path -LiteralPath $cache){throw 'Skip unexpectedly generated a final cache.'}
     if(-not(Test-Path -LiteralPath $part)){throw 'Orphan .part unexpectedly treated as final or removed during skip.'}
@@ -57,6 +79,7 @@ try {
     if((Get-Item -LiteralPath $cache).Length -ne $madeBytes){throw 'Recovered cache size differs from preceding complete cache.'}
     if(Test-Path -LiteralPath $part){throw 'Replacement left .part behind.'}
     Write-Output "PASS four runtime cases, regenerated cache bytes=$madeBytes"
+    }
  } finally {
     # Every restore is attempted even when another fails; preserve generated files for diagnosis.
     $restoreErrors=@()
