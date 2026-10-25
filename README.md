@@ -1,12 +1,40 @@
-![Death Crimson OX VR](hotd2-vr/assets/readme-banner.jpg)
+<div align="center">
+
+<img src="hotd2-vr/assets/readme-banner.jpg" alt="Death Crimson OX VR — experimental Quest and PC VR port" width="100%" />
 
 # Death Crimson OX VR
+### SEGA NAOMI Light-Gun Action · Standalone Meta Quest & PC VR
 
-**Death Crimson OX for standalone Meta Quest and Windows PC VR.** A Flycast/OpenXR conversion with stereo reconstruction, tracked aiming and two players controlled with one headset. Built on mikermak's HOTD2 VR work and the Confidential Mission VR and Lupin VR adaptations.
+[![Release v1.0.0](https://img.shields.io/badge/Release-v1.0.0_Experimental-b95362?style=for-the-badge)](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest)
+[![Quest and PC VR](https://img.shields.io/badge/Headset-Quest_%C2%B7_PC_VR_OpenXR-blue?style=for-the-badge)](#quest-setup)
+[![Original game required](https://img.shields.io/badge/Your_Game-deathcoxj_Japan_Rev_A-orange?style=for-the-badge)](#bring-your-own-game)
 
-[**Download Quest APK**](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest/download/death-crimson-ox-vr-quest.apk) · [**Download PC VR ZIP**](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest/download/death-crimson-ox-vr-pcvr.zip) · [Checksums](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest/download/SHA256SUMS.txt) · [All releases](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases)
+**[⬇️ Quest APK](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest/download/death-crimson-ox-vr-quest.apk)** · **[🖥️ PC VR ZIP](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest/download/death-crimson-ox-vr-pcvr.zip)** · **[🎮 Controls](#controls)**
 
-Experimental: builds and desktop simulator checks are documented below. Physical headset performance, tracking, comfort and full later-stage coverage remain unverified.
+[Checksums](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest/download/SHA256SUMS.txt) · [All releases](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases)
+
+**[🌐 VR4ALL — Standalone VR Mod Installer](https://github.com/vr4all-standalone/vr4all-standalone-vr-mod-installer)**
+
+</div>
+
+---
+
+## Overview
+
+**Death Crimson OX VR** brings the arcade light-gun game to standalone Meta Quest and
+Windows PC VR. The original NAOMI game runs in Flycast; its scenes are reconstructed
+in stereo, and your tracked controllers become the light guns. Two players can play
+with one headset, using a controller for each player.
+
+It carries over the menus and controller features of
+**[Confidential Mission VR](https://github.com/vr4all-standalone/confidential-mission-vr)** and
+**[Lupin the Third VR](https://github.com/vr4all-standalone/lupin-the-third-vr)**.
+These projects build on **[mikermak's VR fork of Flycast](https://github.com/mikermak/hotd2-vr)**,
+itself based on **[Flycast](https://github.com/flyinghead/flycast)**.
+
+**Status: experimental.** Builds and desktop simulator checks are documented below.
+Physical headset performance, tracking, comfort and full later-stage coverage remain
+unverified.
 
 ## What it includes
 
