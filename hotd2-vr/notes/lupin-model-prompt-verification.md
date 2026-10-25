@@ -62,3 +62,13 @@ A subsequent review found that preparation validation alone did not protect the 
 `re/lupin_render_cache_test.ps1` extracts the actual `gunModel` definition verbatim and compiles it with production Source/GunKind/cache validation and a small platform/renderer dependency seam. All payloads are generated synthetic HND1 data. Before the guard, 2 cases passed and 5 failed; afterward, all 7 passed: complete Lupin accepted; incomplete, NaN muzzle, truncated, wrong-count and missing Lupin final blocked before the generic parser; incomplete CM still admitted. The existing 16 builder cases also passed again.
 
 For the runtime regression after obtaining a rebuilt exclusive slot, use `re/lupin-cache-runtime.ps1 -Run -Games <private-original-set-folder> -RendererRejectedOnly`. It mutates independent copies of a previously complete final to flags1 and NaN-muzzle variants, presses B in each, and requires the licensed Arcade fallback without an in-game-model load. A final valid-cache restart captures the in-game pistol. The three cases take about 21 seconds plus process setup/cleanup; the script restores cache and model folders in `finally`.
+
+The focused runtime regression then passed all three cases against the rebuilt renderer guard:
+
+| Run | Result |
+| --- | --- |
+| `lp-cache-incomplete-skip-real` | Flags1 final started preparation; B skipped after 7 game seconds; licensed Arcade selected because the pistol could not be read; no generic Lupin model load |
+| `lp-cache-nan-skip-real` | NaN muzzle final started preparation; B skipped after 6 game seconds; licensed Arcade selected; no generic Lupin model load |
+| `lp-cache-valid-pistol-real` | Complete final logged made-before without preparation; in-game pistol loaded with 2 textures and 258 vertices; `t004-valid-pistol.png` shows its dark barrel and brown grip at bottom-right |
+
+The incomplete-case `t005-rejected-arcade.png` visibly shows the real cyan Namco gun. The valid-pistol image uses the black boot room and the default low controller pose, so it is dark and partly cropped; a lit gameplay capture with the hand raised would show the model more clearly. Runtime exit was 0, original cache hash matched after restoration, the nested fixture restored the outer installed licensed set, and zero clone player processes remained. The localized native renderer change was left uncommitted for root's combined native commit.
