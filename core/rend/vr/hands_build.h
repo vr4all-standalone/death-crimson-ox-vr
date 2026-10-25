@@ -5,7 +5,7 @@
 	same for the hero's staff in The Maze of the Kings (staff-mok.bin), in the same format,
 	and Confidential Mission's guns (gun-cm-*.bin), gun only.
 
-	Standalone (glm and the standard library only), so it can be checked against the Python
+	Standalone (glm, the standard library and platform cache-file replacement), so it can be checked against the Python
 	tool on the PC with the same rip.
 
 	Copyright 2026 mikermak. This file is part of Flycast and is distributed under the GNU GPL v2 or later.
@@ -138,6 +138,13 @@ struct Image
 // palette RAM. False for formats not handled (YUV, bump, planar VQ) or out of VRAM.
 bool decodeTexture(const uint8_t *vram, size_t vramSize, const uint32_t *palette, uint32_t palCtrl,
 		uint32_t tcw, uint32_t tsp, Image& image);
+
+// Lupin's generated gun cache, bounded before allocation and checked against this target.
+// Only complete HND1 v2 gun-only payloads are reusable; .part is never a fallback input.
+constexpr size_t MaxGunCacheBytes = 16 * 1024 * 1024;
+bool validateGunCache(const std::vector<uint8_t>& data, const GunTarget& target);
+bool loadGunCache(const std::string& path, const GunTarget& target);
+bool saveGunCache(const std::vector<uint8_t>& data, const std::string& path, const GunTarget& target);
 
 // Where the textures come from: tcw and the tsp's size bits.
 using TextureSource = std::function<bool(uint32_t tcw, uint32_t tsp, Image& image)>;

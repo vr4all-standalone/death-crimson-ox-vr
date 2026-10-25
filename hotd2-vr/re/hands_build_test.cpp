@@ -22,6 +22,8 @@
 #include <cstdio>
 #include <cstring>
 #include <functional>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <set>
 #include <string>
@@ -248,6 +250,7 @@ struct Result
 	std::string error;
 	GunReport report;
 	Read model;
+	std::vector<uint8_t> bytes;
 };
 Result run(const std::vector<Rip>& captures, const GunTarget& t)
 {
@@ -261,6 +264,7 @@ Result run(const std::vector<Rip>& captures, const GunTarget& t)
 	r.built = buildGun(captures, t, textures, out, r.error, &r.complete, &r.report);
 	if (r.built)
 		r.model = readModel(out);
+	r.bytes = std::move(out);
 	return r;
 }
 
@@ -655,6 +659,69 @@ int main()
 		source.guns[1].file = "gun-lp-pistol.bin";
 		c.check(std::string(source.modelFile()) == "gun-lp-pistol.bin", "Lupin routed to a legacy cache");
 		c.done(Result {});
+	}
+
+	// Cache bytes come only from the synthetic builder above: no game data in this test.
+	const Shot cacheShot { lookAt(dvec3(6, 4, 4), dvec3(0, 0, -0.9)), [](const Quad&) { return true; }, 0.0, 0.0 };
+	const Result cache = run({ capture(model, cacheShot) }, whole);
+	{
+		Case c("cache-valid-and-truncated");
+		c.check(validateGunCache(cache.bytes, whole), "complete builder output rejected");
+		for (size_t cut : { size_t(0), size_t(3), size_t(7), size_t(8), size_t(99), size_t(100), size_t(108),
+				size_t(111), size_t(112), cache.bytes.size() / 2, cache.bytes.size() - 1 })
+			c.check(!validateGunCache(std::vector<uint8_t>(cache.bytes.begin(), cache.bytes.begin() + cut), whole),
+					"truncated cache accepted at " + std::to_string(cut));
+		c.done(cache);
+	}
+	{
+		Case c("cache-rejects-header-and-count-damage");
+		auto damaged = [&](size_t at, uint32_t value) {
+			std::vector<uint8_t> b = cache.bytes;
+			memcpy(b.data() + at, &value, 4);
+			return b;
+		};
+		// Fixed HND1 v2 header offsets. The fixture has a white 1x1 texture and two 2x2
+		// textures, so its mesh-count word is at184 and its first vertex starts at200.
+		for (const auto& edit : { std::pair<size_t, uint32_t>(0, 0), { 4, 1 }, { 8, 0x7fc00000 },
+				{ 100, ModelGunOnly }, { 100, ModelComplete }, { 104, n + 1 }, { 108, 65 },
+				{ 112, 0 }, { 116, 1025 }, { 120, 32 }, { 184, 5 }, { 188, 65 },
+				{ 192, 3 }, { 196, 65537 }, { 200, 0x7fc00000 } })
+			c.check(!validateGunCache(damaged(edit.first, edit.second), whole),
+					"damaged cache accepted at " + std::to_string(edit.first));
+		std::vector<uint8_t> trailing = cache.bytes;
+		trailing.push_back(0);
+		c.check(!validateGunCache(trailing, whole), "trailing payload accepted");
+		std::vector<uint8_t> empty(cache.bytes.begin(), cache.bytes.begin() + 188);
+		empty.resize(204, 0); // four empty mesh slots after the valid texture table
+		c.check(!validateGunCache(empty, whole), "empty gun accepted as complete");
+		c.done(cache);
+	}
+	{
+		Case c("cache-retry-replaces-corrupt-final-and-ignores-part");
+		const std::filesystem::path dir = std::filesystem::current_path() / "lupin-cache-unit";
+		std::filesystem::create_directory(dir);
+		const std::filesystem::path final = dir / "gun-lp-pistol.bin", part = dir / "gun-lp-pistol.bin.part";
+		auto writeBytes = [&](const std::filesystem::path& path, const std::vector<uint8_t>& b) {
+			std::ofstream out(path, std::ios::binary | std::ios::trunc);
+			out.write((const char *)b.data(), b.size());
+		};
+		std::filesystem::remove(final);
+		writeBytes(part, cache.bytes);
+		c.check(!loadGunCache(final.u8string(), whole), ".part used as a completed cache");
+		writeBytes(final, { 'H', 'N', 'D', '1' });
+		c.check(!loadGunCache(final.u8string(), whole), "corrupt final prevents retry");
+		c.check(saveGunCache(cache.bytes, final.u8string(), whole), "cannot replace existing corrupt final");
+		c.check(loadGunCache(final.u8string(), whole), "replacement is not reusable");
+		c.check(!std::filesystem::exists(part), "completed write left .part behind");
+		c.check(!saveGunCache({ 'b', 'a', 'd' }, final.u8string(), whole), "invalid bytes replaced the good cache");
+		c.check(loadGunCache(final.u8string(), whole), "failed replacement damaged the previous cache");
+		// Reject an oversized final before allocating its declared payload.
+		{ std::ofstream out(final, std::ios::binary | std::ios::trunc); out.seekp(MaxGunCacheBytes); out.put(0); }
+		c.check(!loadGunCache(final.u8string(), whole), "oversized cache accepted");
+		std::filesystem::remove(final);
+		std::filesystem::remove(part);
+		std::filesystem::remove(dir);
+		c.done(cache);
 	}
 
 	printf("hands_build_test: %d passed, %d failed\n", passed, failed);

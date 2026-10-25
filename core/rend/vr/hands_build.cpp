@@ -33,12 +33,24 @@
 #include <cstdio>
 #include <cstring>
 #include <iterator>
+#include <fstream>
+#include <filesystem>
 #include <map>
 #include <numeric>
 #include <set>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#ifdef near
+#undef near
+#endif
+#endif
 
 namespace vr::hands
 {
@@ -1658,6 +1670,128 @@ bool decodeTexture(const uint8_t *vram, size_t vramSize, const uint32_t *palette
 			unpack16(c, fmt, px);
 		}
 	return ok;
+}
+
+bool validateGunCache(const std::vector<uint8_t>& data, const GunTarget& target)
+{
+	if (data.size() < 112 || data.size() > MaxGunCacheBytes || target.wholePolys == 0
+			|| memcmp(data.data(), "HND1", 4) != 0)
+		return false;
+	size_t at = 4;
+	bool ok = true;
+	auto word = [&]() -> uint32_t {
+		if (data.size() - at < 4)
+		{
+			ok = false;
+			return 0;
+		}
+		uint32_t v = (uint32_t)data[at] | (uint32_t)data[at + 1] << 8
+				| (uint32_t)data[at + 2] << 16 | (uint32_t)data[at + 3] << 24;
+		at += 4;
+		return v;
+	};
+	auto skip = [&](size_t count) {
+		if (count > data.size() - at)
+			ok = false;
+		else
+			at += count;
+	};
+	if (word() != 2)
+		return false;
+	for (int i = 0; i < 23; i++)
+	{
+		const uint32_t bits = word();
+		// Test the IEEE exponent directly, including under a fast-math build.
+		if ((bits & 0x7f800000u) == 0x7f800000u || (i == 6 && (bits & 0x7fffffffu) != 0))
+			return false;
+	}
+	if (word() != (ModelGunOnly | ModelComplete) || word() != target.wholePolys)
+		return false;
+	const uint32_t textures = word();
+	if (!ok || textures == 0 || textures > 64)
+		return false;
+	for (uint32_t i = 0; ok && i < textures; i++)
+	{
+		const uint32_t width = word(), height = word(), flags = word();
+		if (!ok || width == 0 || height == 0 || width > 1024 || height > 1024 || (flags & ~31u) != 0)
+			return false;
+		skip((size_t)width * height * 4);
+	}
+	if (!ok || word() != 4)
+		return false;
+	for (int mesh = 0; mesh < 4; mesh++)
+	{
+		const uint32_t parts = word();
+		if (!ok || parts > 64 || (mesh == 0 ? parts == 0 : parts != 0))
+			return false;
+		for (uint32_t p = 0; p < parts; p++)
+		{
+			const uint32_t texture = word(), vertices = word();
+			if (!ok || texture >= textures || vertices == 0 || vertices > 65536 || vertices % 3 != 0
+					|| (size_t)vertices * 36 > data.size() - at)
+				return false;
+			for (uint32_t v = 0; v < vertices; v++)
+			{
+				for (int f = 0; f < 8; f++)
+					if ((word() & 0x7f800000u) == 0x7f800000u)
+						return false;
+				skip(4); // RGBA
+			}
+		}
+	}
+	return ok && at == data.size();
+}
+
+bool loadGunCache(const std::string& path, const GunTarget& target)
+{
+	try
+	{
+		std::ifstream in(std::filesystem::u8path(path), std::ios::binary | std::ios::ate);
+		const std::streamoff size = in.tellg();
+		if (!in || size <= 0 || size > (std::streamoff)MaxGunCacheBytes)
+			return false;
+		std::vector<uint8_t> data((size_t)size);
+		in.seekg(0);
+		return (bool)in.read((char *)data.data(), size) && validateGunCache(data, target);
+	}
+	catch (const std::exception&)
+	{
+		return false;
+	}
+}
+
+bool saveGunCache(const std::vector<uint8_t>& data, const std::string& path, const GunTarget& target)
+{
+	if (path.empty() || !validateGunCache(data, target))
+		return false;
+	try
+	{
+		const std::filesystem::path final = std::filesystem::u8path(path), part = std::filesystem::u8path(path + ".part");
+		std::error_code error;
+		std::ofstream out(part, std::ios::binary | std::ios::trunc);
+		out.write((const char *)data.data(), data.size());
+		out.close();
+		if (!out)
+		{
+			std::filesystem::remove(part, error);
+			return false;
+		}
+#ifdef _WIN32
+		// std::rename cannot replace an existing Windows file. Do not remove the old final
+		// first: it stays intact until the same-directory replacement succeeds.
+		const bool replaced = MoveFileExW(part.c_str(), final.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+		std::filesystem::rename(part, final, error);
+		const bool replaced = !error;
+#endif
+		if (!replaced)
+			std::filesystem::remove(part, error);
+		return replaced;
+	}
+	catch (const std::exception&)
+	{
+		return false;
+	}
 }
 
 bool build(const Rip& rip, const Parts& parts, const TextureSource& textures, std::vector<uint8_t>& out, std::string& error)

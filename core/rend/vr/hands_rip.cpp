@@ -131,6 +131,13 @@ std::string gunPath(const GunTarget& gun) {
 	return get_writable_data_path(gun.file);
 }
 
+// Lupin retries incomplete/corrupt final caches; other games retain their existing policy.
+bool gunCached(const Source& source, const GunTarget& gun)
+{
+	const std::string path = gunPath(gun);
+	return source.kind == Source::LupinGun ? loadGunCache(path, gun) : file_exists(path);
+}
+
 bool haveModel()
 {
 	const Source *source = gameModelSource();
@@ -140,7 +147,7 @@ bool haveModel()
 		// rifle: its file missing alone starts no run, PF20; it's watched for in play). An old
 		// gun-cm-cabinet.bin (1.1) is no gun's: left alone, never read.
 		for (const GunTarget& gun : source->guns)
-			if (gun.used() && gun.attractBy <= 0.f && !file_exists(gunPath(gun)))
+			if (gun.used() && gun.attractBy <= 0.f && !gunCached(*source, gun))
 				return false;
 		return true;
 	}
@@ -221,7 +228,7 @@ void onStart()
 		for (int i = 0; i < 3; i++)
 		{
 			const GunTarget& gun = source->guns[i];
-			gunDone[i] = !(cmRun || lupinRun) || !gun.used() || file_exists(gunPath(gun));
+			gunDone[i] = !(cmRun || lupinRun) || !gun.used() || gunCached(*source, gun);
 			gunFailedAt[i] = 0;
 			std::vector<Rip>().swap(gunCaptures[i]);
 			gunSeen[i] = false;
@@ -548,7 +555,9 @@ bool saveGun(const GunTarget& gun, int i, const std::vector<u8>& model, u32 poly
 		const std::string *verdict)
 {
 	const std::string path = gunPath(gun);
-	if (!save(model, path))
+	const Source *source = gameModelSource();
+	const bool lupin = source != nullptr && source->kind == Source::LupinGun;
+	if (!(lupin ? saveGunCache(model, path, gun) : save(model, path)))
 	{
 		WARN_LOG(RENDERER, "VR hands: can't write %s", path.c_str());
 		return false;
