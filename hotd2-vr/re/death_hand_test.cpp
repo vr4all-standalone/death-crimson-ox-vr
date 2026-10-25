@@ -57,12 +57,14 @@ namespace vr {struct GunState {int ammo=0;};bool cutscene(){return false;}bool g
 bool dualWield=false,p2StartWas=false,recenterWas=false,laserWas=false,menuWas=false,p1StartWas=false;
 bool p1Armed=false,menuHowToPlay=false,inCutscene=false,cutsceneVeto=false;
 bool pointerShown[2]{};
+bool preparationActionsSampled=false;
 bool focused=true,menuOpen=false,skipWas=false,skipSwallow=false,startSwallow=false,ringDumpRequested=false;
 XrTime dualSince=0,leftHoldSince=0,leftTapUntil=0;
 bool leftHoldMenu=false;
 std::atomic<bool> newGame{false};
 struct {bool held=false;} slide;
-namespace hands {bool preparing(){return false;}void skipPrep(){}}
+bool testPreparing=false;
+namespace hands {bool preparing(){return testPreparing;}void skipPrep(){testPreparing=false;}}
 namespace menu {void open(const glm::mat4&) {}}
 void setHowToPlay(bool on,const char*){menuHowToPlay=on;}
 void noteHolds(const char*){}
@@ -117,7 +119,7 @@ void swapOption(bool on){
 #endif
 }
 void reset(){
- productionGunInput=false;testAimOnScreen=true;testAimOutside=false;
+ productionGunInput=false;testAimOnScreen=true;testAimOutside=false;testPreparing=false;
 #if PHYSICAL_RELEASE_LATCH
  triggerReleaseWait[0]=triggerReleaseWait[1]=false;
 #endif
@@ -290,5 +292,34 @@ void heldPhysicalTriggerAcrossFrames(){
   check(guns[0].hand==p2&&(sentButtons[0]&3)==(onScreen?1u:2u),"fresh press after physical release transfers and shoots/reloads normally");
  }
 }
-int main(){defaultAndPersistence();singleHandPolicy();startsAndJoin();liveSwapAndLeave();menuAndLabels();perPlayerButtonsAndLifecycle();heldPhysicalTriggerAcrossFrames();
+void heldOtherHandThroughPreparation(){
+ // updateLightgun's production preparing branch runs unchanged. The backend completion
+ // flag and pose/XR transport are the only preparation dependencies supplied here.
+ for(int held:{Left,Right})for(bool onScreen:{false,true})for(bool skip:{false,true}){
+  reset();productionGunInput=true;testAimOnScreen=onScreen;p1Armed=true;
+  config::VrDualWield=false;const int active=1-held;
+  guns[0].hand=active;guns[1].hand=held;
+  guns[0].pointedDown=true;guns[1].pointedDown=false;
+  triggerPull[held]=.9f;triggerPull[active]=0;testPreparing=true;
+  updateLightgun(100);updateLightgun(101);
+  check(!(sentButtons[0]&3),"preparation sends no trigger input while other physical hand is held");
+  check(guns[0].pointedDown&&!guns[1].pointedDown,"preparation preserves physical downward-reload latches");
+  if(skip){buttons[skipAction][held]=true;updateLightgun(102);buttons[skipAction][held]=false;}
+  else testPreparing=false;
+  for(int frame=103;frame<=106;++frame){
+   updateLightgun(frame);
+   check(!(sentButtons[0]&3),"other hand held through preparation completion/skip cannot fire or reload on resume");
+  }
+  tracking[held]=false;triggerPull[held]=0;updateLightgun(107);
+  tracking[held]=true;triggerPull[held]=.9f;updateLightgun(108);
+  check(!(sentButtons[0]&3),"tracking loss after preparation cannot release a held physical trigger");
+  triggerPull[held]=.4f;updateLightgun(109);updateLightgun(110);
+  check(!(sentButtons[0]&3),"half-release after preparation leaves the other physical trigger suppressed");
+  triggerPull[held]=.35f;updateLightgun(111);
+  check(!(sentButtons[0]&3),"physical release after preparation clears suppression without firing");
+  triggerPull[held]=.9f;updateLightgun(112);
+  check(guns[0].hand==held&&(sentButtons[0]&3)==(onScreen?1u:2u),"fresh pull after preparation and physical release switches hand and fires normally");
+ }
+}
+int main(){defaultAndPersistence();singleHandPolicy();startsAndJoin();liveSwapAndLeave();menuAndLabels();perPlayerButtonsAndLifecycle();heldPhysicalTriggerAcrossFrames();heldOtherHandThroughPreparation();
  std::printf("%s %d production hand-policy and INI checks (%d failures)\n",failed?"FAIL":"PASS",checks,failed);return failed?1:0;}

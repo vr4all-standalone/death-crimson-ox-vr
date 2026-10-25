@@ -32,6 +32,7 @@
 */
 #include "xr_hands.h"
 #include "hands_rip.h"
+#include "death_model.h"
 #include "glb_mesh.h"
 #include "xr_own.h"
 #include "rend/vr_reproject.h"
@@ -648,7 +649,8 @@ const HandsModel *gunModel(GunKind kind)
 				const std::string path = get_writable_data_path(gun.file);
 				// Lupin's prep and renderer must agree: skipped/rejected caches keep the fallback.
 				// CM still accepts its partial guns under the existing generic-loader policy.
-				if (source->kind == hands::Source::LupinGun && !hands::loadGunCache(path, gun))
+				if ((source->kind == hands::Source::LupinGun && !hands::loadGunCache(path, gun))
+						|| (source->kind == hands::Source::DeathGun && !hands::loadDeathGunCache(path)))
 					slot.missing = !file_exists(path);
 				else
 					slot.loaded = load(slot.model, path, std::string(), slot.missing);
@@ -806,8 +808,10 @@ std::vector<GunChoice> gunChoices()
     std::vector<GunChoice> choices;
     // Offer a generated pistol only when the running game has a verified source.
     // Death Crimson currently uses the credited Arcade/Zapper and user models.
-    if (gameModelSource() != nullptr)
-        choices.push_back({ 1, "In-game pistol", config::VrGameHands && gunModel(GunKind::Pistol) != nullptr, gunComplete(GunKind::Pistol) });
+	if (gameModelSource() != nullptr)
+	{
+		choices.push_back({ 1, "In-game pistol", config::VrGameHands && gunModel(GunKind::Pistol) != nullptr, gunComplete(GunKind::Pistol) });
+	}
 	// the folder guns, whatever vr.GameHands says: the bundled ones first (a skipped one isn't made)
 	refreshOwn();
 	for (size_t i = 0; i < ownGuns.size(); i++)

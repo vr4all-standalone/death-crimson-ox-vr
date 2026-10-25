@@ -3,7 +3,7 @@
    and skips only the native damage-induced ammo refill in the running test process.
    The harness restores private configuration/saves and stops only its owned PID.
    Do not run concurrently with other death-test scenarios in this checkout. #>
-param([ValidateRange(1024,65535)][int]$Port=27116,[switch]$Reuse)
+param([ValidateRange(1024,65535)][int]$Port=27116,[switch]$Reuse,[switch]$NativeModel)
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 $env:VRLGH_GAMES=Join-Path $repo 'build-win\game-data'
@@ -23,9 +23,10 @@ $on+=@('VR: P2 magazine 0 -> 10|19|xr right/b 1 650','VR: P2 magazine 0 -> 10|20
  'VR: P2 magazine 0 -> 10|36|xrstate focused','VR: P2 magazine 0 -> 10|37|xr right/trigger 1 5000',
  'VR: P2 magazine 0 -> 10|38|poke 0c0974b0 4 00000000','VR: P2 magazine 0 -> 10|44|xr right/trigger 1 400',
  'VR: P2 magazine 0 -> 10|45.5|xr left/trigger 1 400')
+$modelConfig=if($NativeModel){'config:vr.GameHands=yes,config:vr.HandsPrep=yes,config:vr.Gun=1,config:vr.BuiltInGun=no'}else{'config:vr.GameHands=no,config:vr.Gun=4,config:vr.GunFile=namco'}
 if(-not $Reuse){
 & (Join-Path $repo 'hotd2-vr\death-test.ps1') -Game deathcoxj -Name dc-magazines-accept -Port $Port -Seconds 134 -XrSim -Visible `
- -Config 'config:vr.GameHands=no,config:vr.FovScale=2,config:vr.WidenFov=yes,config:vr.Gun=4,config:vr.GunFile=namco,config:vr.WatchRam=0c18bfc9:1,0c097ae0:4,0c18c005:1,0c097ae4:4' `
+ -Config ($modelConfig+',config:vr.FovScale=2,config:vr.WidenFov=yes,config:vr.WatchRam=0c18bfc9:1,0c097ae0:4,0c18c005:1,0c097ae4:4') `
  -At $at -On $on -Expect @('VR: P1 magazine 0 -> 10','XR: P1 kick:','XR: P2 kick:',
  'VR: P2 magazine 0 -> 10','XR: player 1 reload button \(sensor\)','XR: player 2 reload button \(sensor\)',
  'XR: player 2 joins: a gun in each hand','XR: player 2 is out: one gun again','XR: the gun is in the right hand','XR: the gun is in the left hand') -Reject @('cannot bind','initialisation failed')

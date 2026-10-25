@@ -6,6 +6,9 @@
 */
 #include "hands_rip.h"
 #include "hands_build.h"
+#include "death_model.h"
+#include "death_prep.h"
+#include "hw/naomi/naomi_cart.h"
 #include "xr_host.h"
 #include "xr_sim.h"
 #include "rend/vr_reproject.h"
@@ -89,6 +92,9 @@ std::atomic<bool> newModel, skipRequested;
 std::atomic<float> progress;
 std::atomic<bool> staffRun;	// the run is for the hero's staff
 std::atomic<bool> cmRun;	// ...for Confidential Mission's guns
+std::atomic<bool> deathRun;
+bool deathAttempted = false; // emulation-thread session latch; pause/resume does not retry a skipped run
+DeathPreparation deathPreparation;
 std::atomic<bool> lupinRun;	// ...for Lupin's neutral attract-sequence pistol
 // Confidential Mission's guns (Source::guns): made (or not wanted), and the pass a try at one
 // that isn't merged failed (gunMutex)
@@ -135,6 +141,8 @@ std::string gunPath(const GunTarget& gun) {
 bool gunCached(const Source& source, const GunTarget& gun)
 {
 	const std::string path = gunPath(gun);
+	if (source.kind == Source::DeathGun)
+		return loadDeathGunCache(path) && loadGunCache(path, gun);
 	return source.kind == Source::LupinGun ? loadGunCache(path, gun) : file_exists(path);
 }
 
@@ -199,6 +207,8 @@ void stopPrep(const char *why, State next = Watching)
 void onStart()
 {
 	state = Off;
+	deathRun = false;
+	deathPreparation.begin(false, false);
 	skipRequested = false;
 	progress = 0.f;
 	// a new game: whatever model the renderer has is another game's
@@ -208,6 +218,28 @@ void onStart()
 		return;
 	cmRun = source->kind == Source::CmGuns;
 	lupinRun = source->kind == Source::LupinGun;
+	deathRun = source->kind == Source::DeathGun;
+	if (deathRun)
+	{
+		staffRun = false;
+		const GunTarget& gun = source->guns[1];
+		if (gunCached(*source, gun))
+		{
+			NOTICE_LOG(RENDERER, "VR hands: the in-game soldier pistol, made before: %s", gunPath(gun).c_str());
+			return;
+		}
+		if ((!xr::enabled() || xr::sim::active()) && !config::VrHandsPrep)
+			return;
+		if (deathAttempted) return;
+		deathAttempted = true;
+		deathPreparation.begin(true, false, xr::enabled());
+		startedAt = gameSeconds();
+		fastForwardWas = settings.input.fastForwardMode;
+		state = Preparing;
+		NOTICE_LOG(RENDERER, "VR hands: no model yet, reading the in-game soldier pistol from your cartridge");
+		return;
+	}
+
 	const bool watchOnly = haveModel();
 	if (watchOnly)
 	{
@@ -285,6 +317,55 @@ void onVBlank()
 {
 	if (state != Preparing)
 		return;
+	if (deathRun)
+	{
+		const Source *source = gameModelSource();
+		if (source == nullptr || source->kind != Source::DeathGun)
+		{
+			stopPrep("stopped", Off);
+			return;
+		}
+		const GunTarget& gun = source->guns[1];
+		const bool made = deathPreparation.tick(skipRequested.load(),
+			[](std::vector<uint8_t>& bytes, std::string& error) {
+				return buildDeathGun([](uint32_t offset, size_t bytes, uint8_t *dst) {
+					if (CurrentCartridge == nullptr || bytes > UINT32_MAX
+							|| offset > CurrentCartridge->getSize() || bytes > CurrentCartridge->getSize() - offset)
+						return false;
+					u32 count = (u32)bytes;
+					const void *src = CurrentCartridge->GetPtr(offset, count);
+					if (src == nullptr || count != bytes) return false;
+					memcpy(dst, src, bytes);
+					return true;
+				}, bytes, error);
+			},
+			[&gun](const std::vector<uint8_t>& bytes, std::string& error) {
+				if (!validDeathGunCache(bytes, error)) return false;
+				if (saveGunCache(bytes, gunPath(gun), gun)) return true;
+				error = "can't write the native pistol cache";
+				return false;
+			});
+		if (made)
+		{
+			progress = 1.f;
+			newModel = true;
+			NOTICE_LOG(RENDERER, "VR hands: complete in-game soldier pistol from your cartridge saved to %s", gunPath(gun).c_str());
+			stopPrep("done", Off);
+		}
+		else if (!deathPreparation.preparing())
+		{
+			if (deathPreparation.phase == DeathPreparation::Phase::Skipped)
+				stopPrep("skipped", Off);
+			else
+			{
+				WARN_LOG(RENDERER, "VR hands: native pistol unavailable: %s (Arcade gun this time)", deathPreparation.error.c_str());
+				stopPrep("native pistol unavailable", Off);
+			}
+		}
+		else
+			progress = .25f;
+		return;
+	}
 	if (skipRequested)
 	{
 		// Confidential Mission (S23): skipped is skipped for the session, no gun made by watching
@@ -514,6 +595,7 @@ void onEvent(Event event, void *)
 		onVBlank();
 		break;
 	case Event::Terminate:
+		deathAttempted = false;
 		stopPrep("stopped");
 		state = Off;
 		break;
@@ -815,6 +897,8 @@ void observePass(const rend_context& ctx, const RenderPass& pass, const RenderPa
 	const Source *source = gameModelSource();
 	if (state == Off || source == nullptr)
 		return;
+	if (source->kind == Source::DeathGun)
+		return;
 	if (source->gunModels())
 	{
 		observeGuns(ctx, pass, prev, *source);
@@ -917,6 +1001,10 @@ bool takeNewModel() {
 
 bool preparing() {
 	return state == Preparing;
+}
+
+void prepFramePresented() {
+	if (state == Preparing && deathRun) deathPreparation.presented();
 }
 
 float prepProgress() {

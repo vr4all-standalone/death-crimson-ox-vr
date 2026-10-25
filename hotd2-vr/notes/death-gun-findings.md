@@ -1,5 +1,8 @@
 # Death Crimson OX native gun investigation
 
+
+Later offline cartridge research found a complete **soldier pistol** in the stored E410 character asset. This is the native gun now supported by `death_model.cpp`; it is not established as the protagonists' mythical Crimson. See the final section for the validated direct-extraction source. The earlier capture findings below remain accurate for their sampled scenes.
+
 2026-10-25. Initial inspection used existing captures offline. A subsequent authorized neutral attract run (`dc-attract-gun-corpus`, private UDP port 27116) lasted 220 seconds, sent no game inputs, saved ten geometry captures, and exited cleanly with settings/saves restored. All geometry analysis was offline; no simulator was used for this investigation.
 
 No complete protagonist pistol is established by the current captures. The robot in `dc-route-port` carries a scythe. The apparent multi-hole barrel texture is paired knee armour, not a gun. The character in `dc-reva-baseline` pass 2 is an unarmed woman; her silver texture candidates are cuffs/collar and chest clothing. These meshes must not be advertised or cached as the player's native pistol. Use the Arcade gun/custom models until an actual complete in-game pistol can be verified from another scene.
@@ -77,3 +80,44 @@ At 135 seconds the raw pass includes the green-jacket man, the magenta-clothed w
 The existing texture decoder does not handle five format-4 bump-map variants in pass 4 (`0xB12000`, `0xB1E800`, `0xB2C800`, `0xB3A000`, `0xB46800`), or the format-3 full-screen YUV quad in pass 8 (`0x99D800`). Those unsupported texture layers are omitted from contact sheets; their geometry remains in numeric inventories and in the mechanical-enemy preview without those texture layers. This does not conceal a pistol mesh: all human texture ranges and the complete selected mechanical geometry were inspected separately.
 
 The larger sample reinforces the limited conclusion: **no verified complete native protagonist pistol is available from these captures**. There is a large enemy mechanical forearm assembly, but no established standalone robot pistol that should substitute for the player's gun. Retain the Arcade/custom model fallback. Future native preparation needs a distinct scene that actually exposes the protagonist's pistol and verifies its complete grip/barrel/all-sided geometry; do not invent a Death Crimson native source from the observed clothing, armour, scythe, forearm assembly, or baked tutorial image.
+## Complete soldier pistol found directly in the owned cartridge
+
+A later offline investigation read the actual cartridge bytes rather than adding more attract captures. The ten `mpr-23514.ic1` through `mpr-23523.ic10` files concatenate into an ISO9660 GD data filesystem; the volume descriptors start at IC1-relative `0x8000`, and filesystem sector addresses have GD sector base 45000. This made the game's original `.ARI` archive indices, `.ARX` payloads, Ninja `.NJ` models and PVR textures inspectable without a running emulator or an external model download.
+
+The complete native firearm is `/CHA/E410.ARX` -> `E410A_ATOP.NJ`, texture `MSGUN01.PVR`. The whole character is a humanoid soldier; the distinct pistol is held beside its right leg. Six-direction previews of both the character and the isolated pistol show a barrel, grip, trigger/guard area and all-sided thickness. The E411 soldier has the same pistol shape. This is an **in-game soldier pistol**, not proof that this model is the protagonists' mythical Crimson. The C610 green-jacket protagonist and C620 magenta character's stored whole bind meshes have empty hands. `C720GUN.PVR` belongs to a black-clothed woman's holstered pistol: its nine-strip mesh contains a grip/holster and remains unsuitable as a complete hand model.
+
+The private research prototype and all extracted previews live under the main workspace's ignored `.cache/death-port/native-research/`. No extracted geometry, texture, ROM or native cache is included in source. Only the bounded parser, constants, tests and these findings are source material.
+
+### Validated source descriptors
+
+All offsets in the table are absolute NAOMI cartridge addresses. IC1 begins at cartridge `0x00800000`; therefore cartridge offsets differ from offsets in the concatenated filesystem by `0x00800000`.
+
+| Source | Cartridge offset | Bytes | CRC32 |
+| --- | ---: | ---: | --- |
+| `CHA/E410.ARI` | `0x01201800` | 480 | `d18c824c` |
+| `CHA/E410.ARX` | `0x01202000` | 144336 | `ee33a987` |
+| `E410A_ATOP.NJ` (ARX `+0x2c`) | `0x0120202c` | 27268 | `0773ccf0` |
+| `MSGUN01.PVR` (ARX `+0x10310`) | `0x01212310` | 2080 | `7713c0f4` |
+
+ARI records have 32 filename bytes followed by little-endian 32-bit size and ARX-relative offset; record zero describes the archive and eleven following records are files. The pistol model's NJ chunks are NJTL(184 bytes), POF0(12), NJCM(26904), POF0(136). Its NJCM header begins at NJ-file `0xd4`, so the model payload starts at `0xdc`.
+
+All following offsets are relative to that NJCM payload:
+
+- Rigid pistol object `0x291c`: flags `0x54`, model `0x2dc8`, no child or sibling.
+- Model `0x2dc8`: own vertex list `0x2b34`, own polygon list `0x2950`; no parent pose or skeletal/shared-vertex reconstruction is needed.
+- Vertex list: type `0x29` (position + normal), flags zero, 163-word payload, start index 0, 27 vertices with 24-byte stride, then end marker. Positions start at `0x2b3c`.
+- Polygon list: material `0x2517`, texture chunk `0x40030408` (NJTL texture 3 = `msgun01`), UV255 strip chunk at `0x2964` with 228 short words and ten strips. Strip corners start at `0x296a`. There are 72 corners and 52 nondegenerate triangles; the padding/end words are checked explicitly.
+- Topology: 27 welded vertices, 77 unique edges; 76 edges appear twice, one appears four times, **zero open edges**. Thus this source is all-sided, including its low-polygon game's original trigger/guard treatment.
+- PVR: 64x64 RGB565, small VQ layout `0x10`; 128 four-pixel codebook entries (1024 bytes) plus 32x32 block indices (1024 bytes). Decoded RGBA CRC32 is `703049d6`.
+
+### Orientation, output and verification
+
+`core/rend/vr/death_model.{h,cpp}` exposes a bounded `DeathGunReader` callback taking `(absolute cartridge offset, byte count, destination)`, `buildDeathGun`, `validDeathGunCache` and `loadDeathGunCache`. It reads only the 480-byte ARI and 144336-byte ARX regions, validates source CRCs, file boundaries, chunk layout, rigid-object boundaries, vertex/strip counts and indices, then builds HND1 v2 gun-only + complete bytes. Wrong sources, unavailable reads or malformed data return an empty output and a reason. It needs no replay, Start injection, model download or bundled game asset.
+
+The barrel points down canonical `-Z`, the grip hangs toward `-Y`, and the top-grip origin is the mean of original source vertices 16, 19, 17 and 18. The source barrel-back axis is `normalize(v7-v4)`; the across axis is `normalize(v8-v0)` orthogonalized against it; up is their right-handed cross product. Muzzle position is the mean of the front-face vertices 0, 4, 8 and 12. The overall barrel-axis extent is scaled to **0.24 m** as a practical hand-model size, not a physically measured property of the game's fictional weapon.
+
+The generated cache is 22152 bytes: one 64x64 texture, one 156-vertex triangle body and three empty slide/hand meshes. Source polygon count is ten strips, not 52 triangles. Final bounds in metres are approximately `x +/-0.013707`, `y -0.080722..0.082728`, `z -0.187471..0.052529`; muzzle `(0, 0.054280, -0.179323)`. The independent `vrcheck.py hnd --polys 10 --gun-only --complete --length .24` passes and finds the hold origin only 5% of grip depth off its centre. All 52 generated triangle windings agree with the stored source normals. Actual generated cache six-view preview was inspected.
+
+The cache validator checks exact bounded layout and counts, gun-only/complete flags, texture CRC, finite values (IEEE exponent checks also under fast-math), unit normals, UV/color bounds, muzzle/origin/slide metadata, measured dimensions and complete topology. It does not require identical floating-point payload hashes across MSVC/ARM; harmless arithmetic differences within the small measured tolerances remain valid. Disk reload allocates only the known 22152 bytes, rejects wrong-sized or damaged files and refuses `.part` paths.
+
+Standalone `hotd2-vr/re/death_model_test.ps1` extracts only the user's private IC2 file into ignored `build-win/vrtest/death-model-unit` and links the helper with MSVC. RED -> GREEN was recorded for the missing builder; an independent grip check then exposed an overly rearward initial origin, which received a failing regression before correction. The final **21/21** tests cover real owned-source extraction, determinism, unavailable/throwing readers, incorrect source CRCs, malformed pointer/count/strip/chunk/nonfinite input using test-only CRC collision repair to reach parser checks, incomplete/corrupt caches, file reload and size bounds. No proprietary fixture bytes are present in the test source. Parent integration owns preparation-panel lifecycle, skip/fallback/retry, runtime cartridge access, atomic cache save and renderer consumption; those must be verified separately from this offline helper.

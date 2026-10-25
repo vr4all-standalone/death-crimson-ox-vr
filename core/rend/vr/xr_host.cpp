@@ -104,6 +104,7 @@ XrPath handPaths[2];
 XrSpace aimSpaces[2];
 XrSpace gripSpaces[2];		// the hand on the handle (grip pose): where the gun's grip goes
 XrActionSet actionSet = XR_NULL_HANDLE;
+bool preparationActionsSampled = false; // headset thread, reset for each submitted frame
 XrAction aimAction, handAction, triggerAction, startAction, skipAction, menuAction, recenterAction, laserAction, hapticAction, stickAction, gripAction;
 PFN_xrRequestDisplayRefreshRateFB requestRefreshRate;
 PFN_xrPerfSettingsSetPerformanceLevelEXT setPerformanceLevel;
@@ -2144,18 +2145,15 @@ void updateLightgun(XrTime time)
 		// B (or Y): not now, the arcade gun this time (the menu button does nothing now)
 		if (skip)
 			hands::skipPrep();
+		preparationActionsSampled = true;
 		if (menuEdge)
 		{
 			NOTICE_LOG(INPUT, "XR: menu button");
 			NOTICE_LOG(INPUT, "XR: menu: not while the guns are being made");
 		}
+		// Preparation can end with either physical trigger still held.
 		for (Gun& g : guns)
-		{
-			// a trigger held through it doesn't fire when it's over: it waits to be let go
-			g.triggerWas = true;
-			g.triggerWait = true;
-			g.pullAt = 0;
-		}
+			suppressGunInput(g);
 		return;
 	}
 
@@ -2983,7 +2981,8 @@ bool frame()
 	const bool staff = source != nullptr && source->kind == hands::Source::HerosStaff;
 	const bool cmGuns = source != nullptr && source->kind == hands::Source::CmGuns;
 	const bool lupinGun = source != nullptr && source->kind == hands::Source::LupinGun;
-	const bool gunModels = cmGuns || lupinGun;
+	const bool deathGun = source != nullptr && source->kind == hands::Source::DeathGun;
+	const bool gunModels = cmGuns || lupinGun || deathGun;
 	const char *title = "DEATH CRIMSON OX VR";
 	// CM VR 1.2: Confidential Mission's panels in its start screen's colours (VR4All's: the panel, its
 	// line, violet, cream, muted grey, lime)
@@ -3000,11 +2999,11 @@ bool frame()
 		panel.lines = {
 			{ title, 0.085f, violet },
 			{ "", 0.03f, cream },
-			{ lupinGun ? "Making your pistol from your game files (once)" : "Making your guns from your game files (once)", 0.064f, cream },
-			{ lupinGun ? "Watching the attract demo, only this once" : "About a minute or two, only this once", 0.047f, muted },
+			{ deathGun ? "Making your pistol from your game files (once)" : lupinGun ? "Making your pistol from your game files (once)" : "Making your guns from your game files (once)", 0.064f, cream },
+			{ deathGun ? "Reading the original model and texture" : lupinGun ? "Watching the attract demo, only this once" : "About a minute or two, only this once", 0.047f, muted },
 		};
 		panel.progress = hands::prepProgress();
-		panel.footer = "B: skip (the Arcade gun this time)";
+		panel.footer = deathGun ? "B or Y: skip (the Arcade gun this time)" : "B: skip (the Arcade gun this time)";
 	}
 	else if (std::chrono::steady_clock::now() < doneUntil && gunModels)
 		panel.lines = {
@@ -3105,6 +3104,7 @@ bool frame()
 				views[1].fov.angleLeft * deg, views[1].fov.angleRight * deg, views[1].fov.angleUp * deg, views[1].fov.angleDown * deg,
 				chains[0].width, chains[0].height, worldScale(), (float)config::ExtraDepthScale);
 	}
+	preparationActionsSampled = false;
 	updateLightgun(frameState.predictedDisplayTime);
 	retryControllerModels();
 	updateControllers(frameState.predictedDisplayTime);
@@ -3254,7 +3254,9 @@ bool frame()
 	endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
 	endInfo.layerCount = render && ok ? 1 : 0;
 	endInfo.layers = layers;
-	XRCHECK(XR(xrEndFrame)(session, &endInfo));
+	const bool submitted = XRCHECK(XR(xrEndFrame)(session, &endInfo));
+	if (submitted && render && ok && focused && preparing && showPanel && preparationActionsSampled)
+		hands::prepFramePresented();
 	return render && ok;
 }
 

@@ -17,6 +17,9 @@ target_sources(${PROJECT_NAME} PRIVATE
         vr/debug_shots.cpp
         vr/hands_build.cpp
         vr/hands_build.h
+        vr/death_model.cpp
+        vr/death_model.h
+        vr/death_prep.h
         vr/hands_rip.cpp
         vr/hands_rip.h
         norend/norend.cpp)

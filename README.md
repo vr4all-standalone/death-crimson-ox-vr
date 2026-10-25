@@ -1,12 +1,25 @@
+![Death Crimson OX VR](hotd2-vr/assets/readme-banner.jpg)
+
 # Death Crimson OX VR
 
-Experimental standalone Quest and Windows PC VR conversion of the NAOMI arcade game, based on the Flycast/OpenXR work used for Confidential Mission VR and Lupin VR.
+**Death Crimson OX for standalone Meta Quest and Windows PC VR.** A Flycast/OpenXR conversion with stereo reconstruction, tracked aiming and two players controlled with one headset. Built on mikermak's HOTD2 VR work and the Confidential Mission VR and Lupin VR adaptations.
 
-The game is reconstructed in stereo with tracked head movement and controller aiming. Includes the paused VR menu, recentering, gun angle, two reload modes, laser, haptic levels, world size, panel distance, wider view, controller labels, and custom GLB gun/controller support.
+[**Download Quest APK**](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest/download/death-crimson-ox-vr-quest.apk) · [**Download PC VR ZIP**](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest/download/death-crimson-ox-vr-pcvr.zip) · [Checksums](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest/download/SHA256SUMS.txt) · [All releases](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases)
 
-## Game files
+Experimental: builds and desktop simulator checks are documented below. Physical headset performance, tracking, comfort and full later-stage coverage remain unverified.
 
-Supply your own **Japan Rev A** cartridge set:
+## What it includes
+
+- Stereo game reconstruction with tracked head movement and controller aiming.
+- The game's own soldier pistol, prepared locally from your original cartridge on first launch and reused from a validated cache.
+- Two-player gun assignment, solo either-trigger hand transfer, two reload modes, laser and haptic levels.
+- A paused VR menu with gun choice/angle, world size, panel distance, wider view, How to play, recenter and Quit.
+- Credited Arcade gun and Zapper models, custom GLB guns/controllers, and a built-in fallback.
+- A separate Quest app and setup screen; it can coexist with the other VR ports.
+
+## Bring your own game
+
+This release supports **NAOMI Japan Rev A**, resolved as `deathcoxj`:
 
 ```text
 Download/
@@ -14,46 +27,66 @@ Download/
   naomi.zip
 ```
 
-No CHD is used. The game ZIP must contain the verified `epr-23524a.ic22` program and ten `mpr-23514.ic1` through `mpr-23523.ic10` chips. A supported NAOMI BIOS can be in the game ZIP or `naomi.zip` beside it. Setup verifies the actual lengths and CRCs, including the BIOS. The native standalone loader also validates every game chip before emulation.
+The game ZIP contains `epr-23524a.ic22` (4 MiB, CRC `b60e113e`) and all ten `mpr-23514.ic1` through `mpr-23523.ic10` chips (8 MiB each). A supported NAOMI BIOS can be inside the game ZIP or in `naomi.zip` beside it. **No CHD is needed.** Setup validates actual lengths and CRCs, including the BIOS; the standalone native loader also verifies every game chip before emulation.
 
-Older merged sets may be named `deathcox.zip` while containing Japan Rev A. Make a separate copy named `deathcoxj.zip`; renaming alone does not make incompatible contents valid. The current USA set uses a different program. The original Japan program is also unsupported in this build.
+An older merged archive may be called `deathcox.zip` while containing Japan Rev A. Keep the original and make a separate complete copy called `deathcoxj.zip`. Renaming alone cannot make incompatible contents valid. Current USA `deathcox` and original Japan `deathcoxo` programs are unsupported.
 
-The downloads contain no game or BIOS data. Generated game models and research captures are excluded.
+No game, BIOS or extracted native gun data is included in the downloads or source.
+
+## Quest setup
+
+1. Install through [VR4ALL](https://github.com/vr4all-standalone/vr4all-standalone-vr-mod-installer), or sideload the Quest APK with your usual installer.
+2. Put your verified ZIPs in the headset's `Download` folder. VR4ALL transfers them to the canonical paths above and enables file access.
+3. Open **Death Crimson OX VR** under Unknown Sources and grant file access if requested. Its setup screen enables Play when the original set and BIOS pass validation.
+4. First launch prepares the native pistol from those files. B or Y skips it for this session; the Arcade gun remains available. The next game launch can retry.
+
+Application ID: `com.vrlightgunhub.deathcrimsonox`.
+
+## PC VR setup
+
+1. Extract the PC VR ZIP into its own folder.
+2. Create `roms` beside `flycast.exe`, and add your `deathcoxj.zip` and optional separate `naomi.zip` there.
+3. Connect your headset to the active OpenXR runtime, such as Quest Link, SteamVR or Virtual Desktop.
+4. Run **Play Death Crimson OX.cmd**. The first-run model and settings stay with this portable copy.
 
 ## Controls
 
-**Swap P1/P2 is enabled by default.** In two-player mode P1 uses the left controller and P2 the right. Turn it off to reverse that assignment. In single-player, pressing either trigger moves the gun to that hand, independently of this option.
+The **Two players** setting defaults to **P1 left / P2 right**. Choose **P1 right / P2 left** to reverse it. In single-player, either trigger moves the gun to that hand and fires P1, independently of this two-player setting.
 
 | Control | Default action |
 | --- | --- |
 | Either trigger, single-player | Move the gun to that hand and fire P1 |
 | Left X | P1 Start |
 | Right A | P2 Start / join |
-| Y / B | Reload; either works in single-player, each player's own in two-player |
+| Y / B | Reload; either in solo play, each player's own in two-player play |
 | Left Menu | Pause / VR settings |
 | Left stick click | Recenter |
 | Right stick click | Toggle laser |
 | Grip + stick up/down | World size |
 | Grip + stick left/right | Gun size |
 
-With the swap option off, A/B belong to P1 and X/Y to P2. If only one controller is tracked or joining is unavailable, either Start button can start P1. Held triggers must be released before firing after joining, leaving, swapping, or restarting.
+With the assignment reversed, A/B belong to P1 and X/Y to P2. With only one controller tracked, or when joining is unavailable, either Start can start P1. Held triggers must be released before firing after joining, leaving, swapping, restarting or preparation.
 
-Shoot off-screen is the default reload mode; Point off-screen is selectable. Native damage can also refill the magazine as part of the original game's rules.
+**Shoot off-screen** is the default reload mode; **Point off-screen** is selectable. Native ammo refills caused by damage remain part of the original game's behavior. Controller labels explain the active assignment and solo trigger behavior.
 
-## Guns
+## First-run native pistol
 
-The credited **Arcade gun** and **Zapper** are included. Custom GLB guns and sidecar settings use the inherited model-folder workflow. A built-in Arcade gun remains available when model files are missing.
+The native option is the complete **soldier pistol** in the game's E410 model, with its original `MSGUN01.PVR` texture. It is not the protagonists' mythical Crimson weapon. The earlier attract-only search missed it; direct examination of the owned cartridge filesystem established the complete geometry.
 
-No complete native player pistol was verified across the captured story/attract scenes. This build therefore has no generated native-pistol option or first-run extraction wait. It does not reuse another game's extracted gun. The investigation is recorded in `hotd2-vr/notes/death-gun-findings.md`.
+Extraction happens locally from the verified cartridge data, with no gameplay autoplay or external asset download. It produces the game-specific `gun-dc-pistol.bin` cache: a complete 52-triangle, textured pistol at a 0.24 m barrel-axis length. Reuse checks its format, counts, texture integrity and geometry. Missing or corrupt caches are rebuilt; B/Y skip and read/write failure keep the Arcade fallback, without retrying when a paused game resumes. A new launch can retry.
 
-## Builds and validation
+The menu also offers the credited Arcade gun, Zapper and compatible custom GLB models. See the [native model investigation](hotd2-vr/notes/death-gun-findings.md) for the measured source and validation rules.
 
-Windows: `hotd2-vr\build-win.cmd Release ON`. Use `OFF` only for isolated research/regressions. Quest: `hotd2-vr\build-quest.cmd` with a configured JDK and Android SDK. `hotd2-vr\package-release.ps1` validates identities, native policy, source commit, licenses, model credits, and archive contents.
+## Validation and builds
 
-Outputs are `dist/death-crimson-ox-vr-quest.apk` and `dist/death-crimson-ox-vr-pcvr.zip`. Run the PC archive's `Play Death Crimson OX.cmd`; put the same owned ZIPs in its `roms` folder. On Quest, open Death Crimson OX VR under Unknown Sources and follow its file-access/setup screen.
+See the [validation record](hotd2-vr/notes/death-validation.md), [native-state findings](hotd2-vr/notes/death-native-state.md), and [physical headset checklist](hotd2-vr/notes/death-headset-checklist.md). Simulator evidence does not establish physical headset results.
 
-See `hotd2-vr/notes/death-validation.md` for the current evidence and limitations. Simulator results do not establish physical headset tracking, comfort, frame rate, or later-stage coverage.
+Windows: `hotd2-vr\build-win.cmd Release ON`. Quest: `hotd2-vr\build-quest.cmd` with a configured JDK and Android SDK. Research builds can explicitly disable the standalone policy; distributed builds enable it. `hotd2-vr\package-release.ps1` requires clean source and verifies the APK identity/signature, native policy, embedded commit, licenses, model credits and archive exclusions.
+
+The release contains only `death-crimson-ox-vr-quest.apk`, `death-crimson-ox-vr-pcvr.zip` and `SHA256SUMS.txt`. Generated gun caches, ROMs, BIOS, private signing material and research captures are excluded. The published tag names the corresponding source commit. Releases follow the preceding ports' locally verified build workflow; inherited upstream CI/upload jobs are disabled on this standalone repository.
 
 ## Credits and license
 
-Flycast contributors; mikermak's HOTD2 VR/OpenXR work; Confidential Mission VR and Lupin VR adaptations. Preserve `LICENSE`, `README.flycast.md`, and the distributed license/model-credit notices. Bundled models retain their own licenses. This unofficial project is not affiliated with the game publisher or Meta.
+Flycast by flyinghead and contributors; mikermak's [HOTD2 VR/OpenXR work](https://github.com/mikermak/hotd2-vr); Confidential Mission VR and Lupin VR adaptations. Preserve `LICENSE`, `README.flycast.md` and distributed software/model notices. Bundled models retain their own licenses and credits. The native game pistol is generated from each player's own game and is not redistributed.
+
+The [banner provenance](hotd2-vr/assets/death-banner.md) identifies the promotional artwork; it is not a headset screenshot. This unofficial project is not affiliated with Ecole, Sammy, Sega or Meta.

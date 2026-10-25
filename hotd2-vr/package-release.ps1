@@ -440,13 +440,13 @@ for the current verified scope. This build inherits Flycast and mikermak's hotd2
    and the archive folder as its working directory, so this copy uses its own emu.cfg.
 
 Controls: either trigger shoots and selects the hand in single-player. In two-player play,
-P1 defaults to the left hand and P2 to the right. Swap P1/P2 is On by default; Off reverses them.
+P1 defaults to the left hand and P2 to the right. The Two players setting defaults to P1 left / P2 right; choose P1 right / P2 left to reverse them.
 A/X start the player on that controller; B/Y reload. Left Menu opens settings, left stick
 click recenters, and right stick click toggles the laser. The paused menu includes gun choice,
 gun angle, reload modes, haptics, world size, panel distance, wider view, How to play and Quit.
-This build offers the credited Arcade gun and Zapper plus custom GLB models. No complete
-native player pistol was verified; no generated native model, save state, game ROM or BIOS
-is supplied. Physical headset checks remain pending.
+First launch prepares the in-game soldier pistol from your own cartridge and keeps a validated
+cache. B/Y skips it; corrupt caches rebuild. Arcade gun, Zapper and custom GLBs remain available.
+No generated native model, save state, game ROM or BIOS is supplied. Physical headset checks remain pending.
 emu.cfg enables VR (vr.Xr = yes), OpenGL (pvr.rend = 0) and native depth interpolation.
 
 No game is included. Unofficial fan project, not affiliated with Sega or Ecole.

@@ -23,7 +23,9 @@ Cutscenes use the guarded native scene resolver and active-player mask with inhe
 
 | Check | Result |
 | --- | --- |
-| Actual hand/menu/INI/label/input functions | 298 checks, 0 failures |
+| Actual hand/menu/INI/label/input functions | 378 checks, 0 failures |
+| Direct native pistol decoder/cache | 21 checks, 0 failures; normal and fast-math |
+| Preparation scheduling, skip/failure/retry/presentation | 19 checks, 0 failures |
 | Native gun, ADC mapping and scene bounds | 0 failures; every 640x480 axis target checked within one pixel |
 | Delayed native accepted-shot feedback | 11 checks, 0 failures; delayed-counter regression observed failing before fix |
 | Actual gunChoices, licensed/custom models, missing-file fallback | 21 checks, 0 failures; empty-choice regression observed failing before fix |
@@ -36,13 +38,19 @@ Cutscenes use the guarded native scene resolver and active-player mask with inhe
 
 `death-ui-accept.ps1` covers the 13-row menu, both licensed gun choices, angle/reload/hand/laser/haptic/world/panel/wider-view changes, persistence across a fresh restart, controller labels, both pointer hands, How to play, Resume, and timed Quit confirmation. Touch, Index, Vive and WMR simulator profiles passed. The first menu fixture expected Lupin's third native-gun choice; corrected to Death Crimson's two licensed models after checking the actual menu logs and saved model stem. The product menu itself required no correction.
 
-Gameplay acceptance: `dc-magazines-accept` ran 134 seconds: P1 accepted 14 rounds with 14 recoil kicks; P2 accepted 13 with 13 kicks. Both reached zero ammo, produced an empty click, reloaded with their assigned button, and fired again. P2 joined right-handed while P1 remained left-handed. P2 left while its right trigger was held: no P1 shot leaked before release; fresh right then left solo pulls transferred and fired correctly. Native movies entered/exited. Menu screenshots had mean RGB difference 0.0 while stationary, 33.28 after head rotation, and resumed gameplay differed by 18.95. System-overlay focus loss preserves the inherited behavior: controller inputs release and guns hide while emulation continues; focus return restores controls and recenters after a long absence. It does not automatically open the VR pause menu.
+Native-pistol gameplay acceptance: `death-gameplay-accept.ps1 -NativeModel` ran 134 seconds: P1 accepted 14 rounds with 14 recoil kicks; P2 accepted 13 with 13 kicks. All 27 accepted-round kicks explicitly used the in-game pistol. Both reached zero ammo, produced an empty click, reloaded with their assigned button, and fired again. P2 joined right-handed while P1 remained left-handed. P2 left while its right trigger was held: no P1 shot leaked before release; fresh right then left solo pulls transferred and fired correctly. Native movies entered/exited. Menu screenshots had mean RGB difference 0.0 while stationary, 25.745 after head rotation, and resumed gameplay differed by 13.586. System-overlay focus loss preserves the inherited behavior: controller inputs release and guns hide while emulation continues; focus return restores controls and recenters after a long absence. It does not automatically open the VR pause menu.
 
 ## Review and limits
 
 Independent source review found a held P2 trigger could transfer to solo P1 on the following frame, and the common boot title alone did not reject the unsupported original Japan program. Both were reproduced in tests and corrected. Release latches now track physical controllers through join, leave, live swap and restart; the loader verifies the exact native chip contents. Parent inspection also covered the later scene adapter and missing-model fallback.
 
-The ten-capture, 220-second neutral attract investigation did not establish a complete native protagonist pistol. No generated native-pistol choice or preparation wait is offered. The credited Arcade gun and Zapper are included, custom GLB models remain supported, and a built-in Arcade gun covers missing asset folders. See `death-gun-findings.md`.
+The ten-capture, 220-second neutral attract investigation did not establish a complete native protagonist pistol. Follow-up cartridge filesystem research identified a complete E410 soldier pistol: 27 stored vertices, ten strips / 52 triangles and the original MSGUN01.PVR texture. This is an actual in-game firearm, not a claim that it is the protagonists' mythical Crimson. The bounded direct decoder now builds the game-specific 22152-byte HND1 cache at first launch. No native geometry or texture is distributed. See `death-gun-findings.md` for source offsets, CRCs, exact layout and topology.
+
+`dc-native-first` extracted and saved the cache from the actual loaded cartridge at 1.273 s, then selected the in-game pistol. Screenshots of the generated pistol in both hands were visually checked. `dc-native-reuse`, `dc-native-corrupt`, `dc-native-skip`, `dc-native-write-failure` and `dc-native-retry` verify valid-cache reuse, deterministic corruption rebuild, B/Y skip across menu pause/resume, clean fallback when cache saving fails, and successful retry on a new launch. The cache fixture restores its initial file after testing. The first-run model requires no gameplay autoplay, camera patch or injected Start.
+
+Preparation review found a query could acknowledge presentation before a panel was drawn or B/Y sampled. A RED regression was added, then the gate moved to explicit acknowledgment only after a focused rendered panel is successfully submitted and preparation actions have been sampled. Held triggers across completion/skip also received real-function RED regressions (40 failures), then the physical-controller release guard fix; all 378 input checks pass. Skipped or failed attempts stay skipped on pause/resume and can retry after a new game launch.
+
+The shared menu now says **Two players**, with explicit **P1 left / P2 right** and **P1 right / P2 left** values. The saved boolean and native player routing are unchanged.
 
 Private RAM/VRAM/geometry and screenshots remain under ignored build directories. Diagnostic runs that missed Start, reset play repeatedly, or missed short simulator pulses are not passing acceptance evidence. The controlled magazine experiment disables only the original game's damage-induced ammo refill at `0x03CAF6` and raises native health, solely through harness POKE actions. That patch is absent from the production profile, shipped settings and binaries; ordinary damage/refill behavior remains intact in the product.
 

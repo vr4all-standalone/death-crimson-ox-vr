@@ -677,6 +677,8 @@ static std::vector<GameProfile> makeProfiles()
     // HUD layers use W=1,2,3 and z=27/18; the world near clip is 20 units.
     p = GameProfile();
     p.gameId = "DEATH CRIMSON OX";
+    p.model.kind = hands::Source::DeathGun;
+    p.model.guns[1] = { "soldier's pistol", "gun-dc-pistol.bin", {}, 10, 10, .24f, false };
     p.gunMenu = true;
     p.analogOffscreenReload = true;
     p.gunRam.deathCrimson = true;
