@@ -5,7 +5,7 @@
 # Death Crimson OX VR
 ### SEGA NAOMI Light-Gun Action · Standalone Meta Quest & PC VR
 
-[![Release v1.0.0](https://img.shields.io/badge/Release-v1.0.0_Experimental-b95362?style=for-the-badge)](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest)
+[![Release v1.0.1](https://img.shields.io/badge/Release-v1.0.1_Experimental-b95362?style=for-the-badge)](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest)
 [![Quest and PC VR](https://img.shields.io/badge/Headset-Quest_%C2%B7_PC_VR_OpenXR-blue?style=for-the-badge)](#quest-setup)
 [![Original game required](https://img.shields.io/badge/Your_Game-deathcoxj_Japan_Rev_A-orange?style=for-the-badge)](#bring-your-own-game)
 
