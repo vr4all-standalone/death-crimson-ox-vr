@@ -48,14 +48,7 @@ public class LupinFilesTest
         f.getParentFile().mkdirs();
         try (FileOutputStream out = new FileOutputStream(f)) {
             if (path.toLowerCase(java.util.Locale.ROOT).endsWith(".chd")) {
-                byte[] header = new byte[125];
-                java.nio.ByteBuffer b = java.nio.ByteBuffer.wrap(header);
-                b.put("MComprHD".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-                b.putInt(124).putInt(5);
-                b.position(84);
-                for (int i = 0; i < ORIGINAL_SHA1.length(); i += 2)
-                    b.put((byte) Integer.parseInt(ORIGINAL_SHA1.substring(i, i + 2), 16));
-                out.write(header);
+                out.write(chdHeader(5));
             } else if (path.endsWith(".gdi")) {
                 out.write("3\n1 0 4 2048 track.bin 0\n2 450 0 2352 track.bin 0\n3 45000 4 2048 track.bin 0\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
                 file(f.getParentFile(), "track.bin");
@@ -340,6 +333,39 @@ public class LupinFilesTest
     }
     private static final String ORIGINAL_SHA1 = "3b7d5dd917b9a2cc9b7b51aad22f8e75383c3301";
 
+    /** Plausible bounded headers/maps, made up without disc payload or game data. */
+    private byte[] chdHeader(int version)
+    {
+        byte[] header = new byte[512];
+        java.nio.ByteBuffer b = java.nio.ByteBuffer.wrap(header);
+        b.put("MComprHD".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        b.putInt(version == 3 ? 120 : version == 4 ? 108 : 124).putInt(version);
+        if (version == 5) {
+            b.putLong(32, 9792).putLong(40, 124);
+            b.putInt(56, 9792).putInt(60, 2448);
+        } else {
+            b.putInt(20, 1).putInt(24, 1).putLong(28, 9792);
+            b.putInt(version == 3 ? 76 : 44, 9792);
+        }
+        int sha = version == 3 ? 80 : version == 4 ? 48 : 84;
+        String identity = version == 3 ? "ded9d1aa791e64b0db962a5ea762f4ff28b2e76a" : ORIGINAL_SHA1;
+        b.position(sha);
+        for (int i = 0; i < identity.length(); i += 2)
+            b.put((byte) Integer.parseInt(identity.substring(i, i + 2), 16));
+        return header;
+    }
+
+    private void chdBytes(byte[] header) throws IOException
+    {
+        java.nio.file.Files.write(new File(download, "lupinshoo/gds-0018.chd").toPath(), header);
+    }
+
+    private String cue() throws IOException
+    {
+        return new String(java.nio.file.Files.readAllBytes(new File(download, "lupinshoo/gds-0018.cue").toPath()),
+                java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     private void complete() throws IOException
     {
         zip(download, "lupinshoo.zip", "317-0325-jpn.pic");
@@ -601,4 +627,149 @@ public class LupinFilesTest
             out.closeEntry();
         }
         assertFalse(LupinFiles.find(roots()).missing.isEmpty());
-    }}
+    }
+    @Test public void supportedChdHeaderVersionsRemainReady() throws IOException
+    {
+        complete();
+        for (int version : new int[] { 3, 4, 5 }) {
+            chdBytes(chdHeader(version));
+            assertTrue("CHD v" + version, LupinFiles.find(roots()).chd);
+        }
+    }
+
+    @Test public void zeroChdHunkSizeNeverReady() throws IOException
+    {
+        complete();
+        for (int version : new int[] { 3, 4, 5 }) {
+            byte[] header = chdHeader(version);
+            java.nio.ByteBuffer.wrap(header).putInt(version == 3 ? 76 : version == 4 ? 44 : 56, 0);
+            chdBytes(header);
+            assertFalse("CHD v" + version, LupinFiles.find(roots()).chd);
+        }
+    }
+
+    @Test public void chdHunksMustContainWholeCdFrames() throws IOException
+    {
+        complete();
+        for (int version : new int[] { 3, 4, 5 }) {
+            byte[] header = chdHeader(version);
+            java.nio.ByteBuffer.wrap(header).putInt(version == 3 ? 76 : version == 4 ? 44 : 56, 9793);
+            chdBytes(header);
+            assertFalse("partial CD frame v" + version, LupinFiles.find(roots()).chd);
+        }
+    }
+
+    @Test public void zeroChdUnitSizeNeverReady() throws IOException
+    {
+        complete();
+        byte[] header = chdHeader(5);
+        java.nio.ByteBuffer.wrap(header).putInt(60, 0);
+        chdBytes(header);
+        assertFalse(LupinFiles.find(roots()).chd);
+    }
+
+    @Test public void impossibleChdCountsAndSizesNeverReady() throws IOException
+    {
+        complete();
+        for (int version : new int[] { 3, 4, 5 }) {
+            byte[] header = chdHeader(version);
+            java.nio.ByteBuffer.wrap(header).putInt(version == 3 ? 76 : version == 4 ? 44 : 56,
+                    version < 5 ? 16 * 1024 * 1024 : 128 * 1024 * 1024);
+            chdBytes(header);
+            assertFalse("oversized hunk v" + version, LupinFiles.find(roots()).chd);
+            header = chdHeader(version);
+            java.nio.ByteBuffer.wrap(header).putLong(version < 5 ? 28 : 32, 0);
+            chdBytes(header);
+            assertFalse("empty logical disc v" + version, LupinFiles.find(roots()).chd);
+            if (version < 5) {
+                header = chdHeader(version);
+                java.nio.ByteBuffer.wrap(header).putInt(24, 0);
+                chdBytes(header);
+                assertFalse("zero hunks v" + version, LupinFiles.find(roots()).chd);
+            }
+        }
+    }
+
+    @Test public void truncatedOrOutOfFileChdMapsNeverReady() throws IOException
+    {
+        complete();
+        byte[] header = chdHeader(5);
+        java.nio.ByteBuffer.wrap(header).putLong(40, 510);
+        chdBytes(header);
+        assertFalse("v5 map beyond file", LupinFiles.find(roots()).chd);
+        chdBytes(Arrays.copyOf(chdHeader(5), 128));
+        assertFalse("v5 truncated at map end", LupinFiles.find(roots()).chd);
+        header = chdHeader(5);
+        java.nio.ByteBuffer.wrap(header).putInt(16, 0x63646c7a).putInt(124, 500);
+        chdBytes(header);
+        assertFalse("v5 compressed map beyond file", LupinFiles.find(roots()).chd);
+        for (int version : new int[] { 3, 4 }) {
+            header = chdHeader(version);
+            java.nio.ByteBuffer.wrap(header).putInt(24, 40);
+            chdBytes(header);
+            assertFalse("legacy map beyond file v" + version, LupinFiles.find(roots()).chd);
+        }
+    }
+
+    @Test public void outOfFileChdMetadataNeverReady() throws IOException
+    {
+        complete();
+        for (int version : new int[] { 3, 4, 5 }) {
+            byte[] header = chdHeader(version);
+            java.nio.ByteBuffer.wrap(header).putLong(version < 5 ? 36 : 48, 510);
+            chdBytes(header);
+            assertFalse("metadata beyond file v" + version, LupinFiles.find(roots()).chd);
+        }
+    }
+
+    @Test public void cueHighDensityIndexMustStartAt45150() throws IOException
+    {
+        completeCueUsesAllTracks();
+        text("lupinshoo/gds-0018.cue", cue().replace("TRACK 03 MODE1/2048\n INDEX 01 00:00:00",
+                "TRACK 03 MODE1/2048\n INDEX 01 00:01:00"));
+        assertFalse(LupinFiles.find(roots()).chd);
+    }
+
+    @Test public void cueIndexFramesMustBeUnder75() throws IOException
+    {
+        completeCueUsesAllTracks();
+        String original = cue();
+        for (String index : new String[] { "00:00:75", "00:00:79", "00:60:00" }) {
+            text("lupinshoo/gds-0018.cue", original.replace("INDEX 01 00:00:00", "INDEX 01 " + index));
+            assertFalse(index, LupinFiles.find(roots()).chd);
+        }
+    }
+
+    @Test public void cueHighDensityMarkerMustPrecedeNewFileContext() throws IOException
+    {
+        completeCueUsesAllTracks();
+        String original = cue();
+        text("lupinshoo/gds-0018.cue", original.replace("REM HIGH-DENSITY AREA\nFILE \"track 3.bin\" BINARY",
+                "FILE \"track 3.bin\" BINARY\nREM HIGH-DENSITY AREA"));
+        assertFalse("REM clears the native FILE context", LupinFiles.find(roots()).chd);
+    }
+
+    @Test public void cueIndexZeroNeedsPendingTrackAndCorrectOrder() throws IOException
+    {
+        completeCueUsesAllTracks();
+        String original = cue();
+        for (String invalid : new String[] {
+                "INDEX 00 00:00:00\n" + original,
+                original.replace("INDEX 01 00:00:00", "INDEX 01 00:00:00\n INDEX 00 00:00:00"),
+                original.replace("INDEX 01 00:00:00", "INDEX 00 00:00:01\n INDEX 01 00:00:00") }) {
+            text("lupinshoo/gds-0018.cue", invalid);
+            assertFalse(LupinFiles.find(roots()).chd);
+        }
+        text("lupinshoo/gds-0018.cue", original.replace("INDEX 01 00:00:00", "INDEX 00 00:00:00\n INDEX 01 00:00:00"));
+        assertTrue("valid INDEX 00/01 ordering", LupinFiles.find(roots()).chd);
+    }
+
+    @Test public void staleCueMustNotHideBehindValidGdi() throws IOException
+    {
+        discAsCueOrGdi();
+        text("lupinshoo/gds-0018.cue", "FILE track.bin BINARY\n TRACK 01 MODE1/2048\n INDEX 01 00:00:00\n");
+        LupinFiles.Result r = LupinFiles.find(roots());
+        assertFalse("the engine chooses the stale parseable CUE first", r.chd);
+        assertNull(LupinFiles.launchPath(null, roots()));
+    }
+}

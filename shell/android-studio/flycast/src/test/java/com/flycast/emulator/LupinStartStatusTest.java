@@ -48,10 +48,12 @@ public class LupinStartStatusTest
         f.getParentFile().mkdirs();
         try (FileOutputStream out = new FileOutputStream(f)) {
             if (path.endsWith(".chd")) {
-                byte[] header = new byte[125];
+                byte[] header = new byte[512];
                 java.nio.ByteBuffer b = java.nio.ByteBuffer.wrap(header);
                 b.put("MComprHD".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
                 b.putInt(124).putInt(5);
+                b.putLong(32, 9792).putLong(40, 124);
+                b.putInt(56, 9792).putInt(60, 2448);
                 b.position(84);
                 for (int i = 0; i < "3b7d5dd917b9a2cc9b7b51aad22f8e75383c3301".length(); i += 2)
                     b.put((byte) Integer.parseInt("3b7d5dd917b9a2cc9b7b51aad22f8e75383c3301".substring(i, i + 2), 16));

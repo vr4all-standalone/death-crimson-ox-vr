@@ -2,11 +2,11 @@
 package com.flycast.emulator;
 
 import java.io.BufferedReader;
-import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -178,8 +178,10 @@ final class LupinFiles
         for (String ext : new String[] { ".cue", ".gdi" })
         {
             File f = new File(base, "gds-0018" + ext);
-            if (validDescriptor(f, ext.equals(".gdi")))
-                return f;
+            // A stale CUE can parse as a CD and shadow the GDI in the native loader.
+            // Validate the first present candidate instead of selecting a different disc.
+            if (f.isFile())
+                return validDescriptor(f, ext.equals(".gdi")) ? f : null;
         }
         return null;
     }
@@ -217,10 +219,10 @@ final class LupinFiles
         return false;
     }
 
-    /** Only the bounded CHD header is read; this distinguishes original GDS-0018 from Rev A. */
+    /** Bounded CHD/map headers check geometry and distinguish original GDS-0018 from Rev A. */
     private static boolean originalChd(File disc)
     {
-        try (DataInputStream in = new DataInputStream(new FileInputStream(disc))) {
+        try (RandomAccessFile in = new RandomAccessFile(disc, "r")) {
             byte[] start = new byte[16];
             in.readFully(start);
             ByteBuffer b = ByteBuffer.wrap(start);
@@ -234,6 +236,43 @@ final class LupinFiles
             byte[] header = new byte[length];
             System.arraycopy(start, 0, header, 0, start.length);
             in.readFully(header, start.length, length - start.length);
+            b = ByteBuffer.wrap(header);
+            long fileSize = disc.length();
+            long hunk = Integer.toUnsignedLong(b.getInt(version == 3 ? 76 : version == 4 ? 44 : 56));
+            long logical = b.getLong(version < 5 ? 28 : 32);
+            long maxHunk = version < 5 ? 16L * 1024 * 1024 : 128L * 1024 * 1024;
+            // libchdr bounds allocation sizes, and the disc reader requires whole CD frames.
+            if (hunk == 0 || hunk >= maxHunk || hunk % 2448 != 0 || logical <= 0)
+                return false;
+            long hunks = version < 5 ? Integer.toUnsignedLong(b.getInt(24)) : 1 + (logical - 1) / hunk;
+            if (hunks == 0 || hunks > (10L * 1024 * 1024 * 1024 - 1) / hunk
+                    || (version == 5 && b.getInt(60) == 0))
+                return false;
+            long metadata = b.getLong(version < 5 ? 36 : 48);
+            if (metadata != 0 && (metadata < length || metadata > fileSize - 16))
+                return false;
+            if (version < 5)
+            {
+                // Legacy maps follow the header and include a 16-byte end cookie.
+                if ((b.getInt(16) & ~2) != 0 || length + (hunks + 1) * 16 > fileSize)
+                    return false;
+            }
+            else
+            {
+                long map = b.getLong(40);
+                boolean compressed = b.getInt(16) != 0;
+                long mapSize = hunks * (compressed ? 12 : 4);
+                if (map < length || mapSize > Integer.MAX_VALUE || map > fileSize - (compressed ? 16 : mapSize + 1))
+                    return false;
+                if (compressed)
+                {
+                    // Read only the fixed map header, never the map/disc payload.
+                    in.seek(map);
+                    long compressedSize = Integer.toUnsignedLong(in.readInt());
+                    if (compressedSize == 0 || compressedSize > fileSize - map - 16)
+                        return false;
+                }
+            }
             int sha = version == 3 ? 80 : version == 4 ? 48 : 84;
             int parent = version == 3 ? 100 : version == 4 ? 68 : 104;
             for (int i = parent; i < parent + 20; i++)
@@ -255,6 +294,9 @@ final class LupinFiles
     private static final Pattern CUE_FILE = Pattern.compile("^FILE\\s+(?:\"([^\"]+)\"|(\\S+))\\s+BINARY\\s*$");
     private static final Pattern CUE_TRACK = Pattern.compile("^TRACK\\s+(\\d+)\\s+(AUDIO|CDG|MODE1/(?:2048|2352)|MODE2/(?:2336|2352)|CDI/(?:2336|2352))\\s*$");
 
+    private static final Pattern CUE_INDEX = Pattern.compile("^INDEX\\s+(00|01)\\s+(\\d+):([0-5]\\d):([0-6]\\d|7[0-4])\\s*$");
+    private static final Pattern CUE_SESSION = Pattern.compile("^REM SESSION (\\d+)$");
+
     /** CUE/GDI has no CHD identity header. Require the original set/disc names and every track;
      * raw-disc revision and physical headset boot remain unverified. */
     private static boolean validDescriptor(File descriptor, boolean gdi)
@@ -263,7 +305,10 @@ final class LupinFiles
             return false;
         try (BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(descriptor), StandardCharsets.UTF_8))) {
             int expected = 0, tracks = 0, files = 0, indexes = 0;
-            boolean highDensity = false, highDensityTrack = false;
+            boolean highDensity = false, highDensityTrack = false, firstTrackOfSession = false;
+            long currentFad = 150, fileStartFad = 0, indexZero = -1;
+            int sectorSize = 0, session = 0;
+            File cueFile = null;
             String line;
             while ((line = in.readLine()) != null)
             {
@@ -288,33 +333,92 @@ final class LupinFiles
                             || (tracks == 3 && Long.parseLong(m.group(2)) != 45000))
                         return false;
                 }
-                else if (line.equals("REM HIGH-DENSITY AREA") || line.equals("REM SESSION 2"))
-                    highDensity = true;
+                else if (line.equals("REM HIGH-DENSITY AREA") || line.equals("REM SINGLE-DENSITY AREA")
+                        || CUE_SESSION.matcher(line).matches())
+                {
+                    if (tracks != indexes)
+                        return false;
+                    if (line.equals("REM HIGH-DENSITY AREA"))
+                    {
+                        highDensity = true;
+                        currentFad = 45150;
+                    }
+                    else
+                    {
+                        Matcher m = CUE_SESSION.matcher(line);
+                        if (m.matches())
+                        {
+                            int next = Integer.parseInt(m.group(1));
+                            if (next == 0)
+                                return false;
+                            if (next != session && next == 2)
+                            {
+                                currentFad = Math.addExact(currentFad, 6750 + 4500 + 150);
+                                firstTrackOfSession = true;
+                                highDensity = true;
+                            }
+                            session = next;
+                        }
+                    }
+                    // The native parser clears FILE/TRACK context at these REM boundaries.
+                    cueFile = null;
+                    sectorSize = 0;
+                }
                 else if (line.startsWith("FILE"))
                 {
                     Matcher m = CUE_FILE.matcher(line);
                     if (!m.matches() || tracks != indexes
                             || !trackExists(descriptor, m.group(1) != null ? m.group(1) : m.group(2)))
                         return false;
+                    cueFile = new File(descriptor.getParentFile(), m.group(1) != null ? m.group(1) : m.group(2));
+                    fileStartFad = currentFad;
+                    sectorSize = 0;
                     files++;
                 }
                 else if (line.startsWith("TRACK"))
                 {
                     Matcher m = CUE_TRACK.matcher(line);
-                    if (files == 0 || tracks != indexes || !m.matches() || Integer.parseInt(m.group(1)) != ++tracks)
+                    if (cueFile == null || tracks != indexes || !m.matches() || Integer.parseInt(m.group(1)) != ++tracks)
                         return false;
                     boolean audio = m.group(2).equals("AUDIO") || m.group(2).equals("CDG");
                     if (((tracks == 1 || tracks == 3) && audio) || (tracks == 2 && !audio))
                         return false;
+                    int nextSize = audio ? 2352 : Integer.parseInt(m.group(2).substring(m.group(2).indexOf('/') + 1));
+                    if (sectorSize == 0)
+                        currentFad = Math.addExact(currentFad, cueFile.length() / nextSize);
+                    sectorSize = nextSize;
+                    indexZero = -1;
                     if (tracks == 3)
                         highDensityTrack = highDensity;
                 }
                 else if (line.startsWith("INDEX"))
                 {
-                    if (line.matches("INDEX\\s+01\\s+\\d+:[0-5]\\d:[0-7]\\d") && indexes + 1 == tracks)
-                        indexes++;
-                    else if (!line.matches("INDEX\\s+00\\s+\\d+:[0-5]\\d:[0-7]\\d"))
+                    Matcher m = CUE_INDEX.matcher(line);
+                    if (!m.matches() || cueFile == null || indexes + 1 != tracks)
                         return false;
+                    long frame = Math.addExact(Math.multiplyExact(Long.parseLong(m.group(2)), 4500),
+                            Integer.parseInt(m.group(3)) * 75L + Integer.parseInt(m.group(4)));
+                    if (m.group(1).equals("00"))
+                    {
+                        if (indexZero >= 0)
+                            return false;
+                        indexZero = frame;
+                    }
+                    else
+                    {
+                        if (indexZero > frame)
+                            return false;
+                        if (firstTrackOfSession && frame > 0)
+                        {
+                            long pregap = Math.min(frame, 150);
+                            fileStartFad -= pregap;
+                            currentFad -= pregap;
+                        }
+                        firstTrackOfSession = false;
+                        if (tracks == 3 && (!highDensityTrack || Math.addExact(fileStartFad, frame) != 45150))
+                            return false;
+                        indexes++;
+                    }
                 }
                 if (tracks > 99 || files > 99)
                     return false;
