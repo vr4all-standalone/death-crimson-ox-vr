@@ -21,12 +21,13 @@ Use the final packaged Lupin build recorded in the validation report. App ID: `c
 ## Controllers and labels
 
 - [ ] Before play, both controllers and the labels are readable at arm's length. Right: A P1 Start, B P1 Reload, trigger P1 Shoot, stick Laser. Left: X P2 Start, Y P2 Reload, trigger P2 Shoot, stick Recenter, Menu.
+- [ ] Hands set to P1 left assigns X/Y to P1 and A/B to P2. Labels change for both hands; Trigger is above Stick where present. The choice survives relaunch.
 - [ ] Label endpoints meet the physical controls. Custom controller GLBs and metadata override the bundled models correctly; a missing side falls back independently.
-- [ ] Before P2 joins, firing either trigger puts P1's gun in that hand. After joining, P1 stays right and P2 stays left.
+- [ ] Before P2 joins, firing either trigger puts P1's gun in that hand. After joining, the Hands setting assigns P1/P2. Switching it preserves each player and magazine, and a held trigger waits for release.
 
 ## Paused menu
 
-- [ ] The twelve rows appear in order: Resume, Recenter, Gun, Gun angle, Reload, Laser, Haptics, World size, Panel distance, Wider view, How to play, Quit.
+- [ ] The thirteen rows appear in order: Resume, Recenter, Gun, Gun angle, Reload, Hands, Laser, Haptics, World size, Panel distance, Wider view, How to play, Quit.
 - [ ] Either pointer/trigger and stick navigation work, including repeat. Opening the menu pauses both game simulation and audio while head movement remains live.
 - [ ] Resume, B, rapid menu toggling, focus changes and recentering produce no time jump, fired round, unintended reload or stuck input.
 - [ ] With Laser off, menu pointers remain visible. How to play shows controllers/labels and restores the guns on closing.
@@ -51,7 +52,7 @@ Use the final packaged Lupin build recorded in the validation report. App ID: `c
 ## Fired rounds and reloads
 
 - [ ] P1 fires seven rounds and P2 six. Every accepted round kicks/flashes once in the correct hand. Empty pulls give a light click and no kick/flash; reloading gives no firing feedback.
-- [ ] B and Y reload only their assigned player. Haptics Off/Low/Normal/Strong behave as labelled; Off retains visual recoil/flash.
+- [ ] B and Y reload only their assigned player. Haptics Off/Light/Medium/Strong behave as labelled; Off retains visual recoil/flash.
 - [ ] Shoot off-screen mode reloads only on an off-screen pull. Merely pointing away does not reload.
 - [ ] Point off-screen mode reloads once per exit after returning on-screen; a full magazine, menu/focus transition and the grey ring do not reload.
 - [ ] In Shoot off-screen mode, start a pull on-screen, keep it held, sweep into the grey ring and fully away: no extra shot or reload. Start a reload away, keep it held and sweep back: no shot. Point off-screen mode intentionally reloads on an armed exit even while held, and waits for release before another shot.
@@ -61,7 +62,7 @@ Use the final packaged Lupin build recorded in the validation report. App ID: `c
 
 - [ ] X joins the actual game with a left gun and separate aim color. Y, trigger and feedback affect P2 only. The single-player start prompt is hidden without hiding P2 HUD once joined.
 - [ ] On P2 loss/continue expiry, one gun returns; P1 can choose either hand again. Joining and leaving during scene transitions is stable.
-- [ ] Noninteractive movie scenes show controllers without labels; guns return as gameplay resumes. Skipping and accepted shots end that state promptly, with no flicker during combat.
+- [ ] Noninteractive movie scenes leave both hands empty; guns return as gameplay resumes. Skipping and accepted shots end that state promptly, with no flicker during combat.
 - [ ] Complete later stages and note any additional weapon or scene behavior requiring a game-specific adaptation: ______.
 
 ## Persistence, performance and PC VR

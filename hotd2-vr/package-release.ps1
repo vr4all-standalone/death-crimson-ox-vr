@@ -433,9 +433,11 @@ Check the source README and Lupin findings for the current verified scope.
    and the archive folder as its working directory, so this copy uses its own emu.cfg.
 
 Controls: trigger shoots, A is P1 Start, B is P1 Reload;
-X is P2 Start and Y is P2 Reload. Left Menu opens settings, left stick click recenters,
+X is P2 Start and Y is P2 Reload by default. Hands swaps the players and labels; with two
+players active their guns/reload buttons swap too. Left Menu opens settings, left stick click recenters,
 right stick click toggles the laser. The paused menu includes gun choice/angle, both reload
-modes, haptics, world size, panel distance, wider view, How to play and confirmed Quit.
+modes, Hands, haptics Off/Light/Medium/Strong, world size, panel distance, wider view,
+How to play and confirmed Quit. Hands are empty during noninteractive story scenes.
 First start makes a complete pistol from your own game. B skips; a later start retries.
 P1 has seven rounds, P2 six; native accepted rounds drive recoil/flash/haptics. No game data
 or generated gun cache is supplied.

@@ -1,4 +1,4 @@
-# Deferred CM update synchronization
+# Final CM update synchronization
 
 The user requested on2026-10-25 that the minor final changes from the Claude Confidential Mission session be carried over **after both that session and this initial Lupin port work conclude**.
 
@@ -11,3 +11,13 @@ Observed final-range commits include P1 hand selection, empty hands in cutscenes
 Never edit/reset the CM checkout, interrupt its processes, copy in-progress changes, borrow CM memory addresses/models/calibration, or expose signing secrets/game data. Preserve Lupin identity and measured fixes. Do not publish or install. No messaging another chat is authorized.
 
 Release builds use a separate clean local clone E:\___flattovrdev\lupin-vr-release configured with core.autocrlf=false. The development checkout's two cgltf paths have identical canonical Git hashes to HEAD but line-ending/stat flags; leave them alone. Automatic approval rejected staging those dependency paths. Do not retry or normalize them. Fetch/fast-forward committed Lupin source into the clean release clone, preserve ignored model/dependency inputs, and build/package there; copy verified outputs into the main Lupin dist. This preserves all clean-source checks.
+
+
+## Authorized execution
+
+The initial port concluded at20924a52e. The user then explicitly confirmed the CM changes were
+finished and only publishing remained, and authorized continuing now. Runtime source comparison
+is pinned through331063b79. Work is performed inline under
+`docs/superpowers/plans/2026-10-25-lupin-cm-sync.md`. The final report
+`dist/cm-sync-verification.json` records completion; until it exists this section is in progress.
+The obsolete wait automation is removed once the synchronization is verified and delivered.

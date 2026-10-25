@@ -21,50 +21,50 @@ $harness = Join-Path $PSScriptRoot 'vr-test.ps1'
 $vrcheck = Join-Path $PSScriptRoot 're\vrcheck.py'
 $inv = [Globalization.CultureInfo]::InvariantCulture
 $base = 'config:vr.GameHands=no,config:vr.BuiltInGun=yes,config:vr.FovScale=2,config:vr.WidenFov=yes'
-$defaults = ',config:vr.Gun=1,config:vr.GunScale=0.68,config:vr.GunAngle=0,config:vr.Reload=0,config:vr.Laser=yes,config:vr.Haptics=2,config:vr.WorldScale=0.11,config:vr.HudDepth=40,config:vr.Widen=yes'
+$defaults = ',config:vr.Gun=1,config:vr.GunScale=0.68,config:vr.GunAngle=0,config:vr.Reload=0,config:vr.Laser=yes,config:vr.Haptics=medium,config:vr.P1Hand=right,config:vr.WorldScale=0.11,config:vr.HudDepth=40,config:vr.Widen=yes'
 $commonReject = @('XR: initialisation failed','Game load failed')
 function T([double]$n) { $n.ToString('0.0##',$inv) }
-# The measured 12-row panel is shared with CM. These pointer tests run before
+# The measured 13-row panel is shared with CM. These pointer tests run before
 # play, when gunInHand() returns null: both rays start at the controller pose.
 function Get-MenuAim([int]$Row,[double]$U,[switch]$Left) {
-    $tx=($U-.5)*.9; $ty=1.5+.337-$Row*.063; $tz=-1.2
+    $tx=($U-.5)*.9; $ty=1.5+.369-$Row*.063; $tz=-1.2
     $hx=if($Left){-.18}else{.18}
     $dx=$tx-$hx; $dy=$ty-1.3; $dz=$tz-(-.35)
     $yaw=[Math]::Atan2(-$dx,-$dz); $pitch=[Math]::Atan2($dy,[Math]::Sqrt($dx*$dx+$dz*$dz))
     '{0} {1}' -f (T ($yaw*180/[Math]::PI)),(T ($pitch*180/[Math]::PI))
 }
 $scenarios=[ordered]@{
-    menu=@{ Seconds=15; Config=$base+$defaults; At=@(
+    menu=@{ Seconds=16; Config=$base+$defaults; At=@(
         '2=xr left/menu 1 150','2.4=stick right 0 -1 150','2.7=xr right/a 1 150',
         '3.1=stick right 0 -1 150','3.4=stick right 1 0 150','3.9=stick right 1 0 150',
         '4.4=stick right 0 -1 150','4.7=stick right 1 0 150',
         '5.2=stick right 0 -1 150','5.5=stick right 1 0 150',
-        '6=stick right 0 -1 150','6.3=stick right 1 0 150',
-        '6.8=stick right 0 -1 150','7.1=stick right 1 0 150',
+        '6=stick right 0 -1 150','6.3=stick right 1 0 150','6.8=stick right 0 -1 150','7.1=stick right 1 0 150',
         '7.6=stick right 0 -1 150','7.9=stick right 1 0 150',
         '8.4=stick right 0 -1 150','8.7=stick right 1 0 150',
         '9.2=stick right 0 -1 150','9.5=stick right 1 0 150',
-        '10=stick right 0 -1 150','10.3=xr right/a 1 150','10.8=xr right/a 1 150',
-        '11.3=stick right 0 -1 150','11.6=xr right/a 1 150',
-        '12=stick right 0 -1 150','12.3=xr right/a 1 150')
-        Expect=@('XR: menu at 1\.20 m, 12 rows, row pitch 0\.063 m, top row \+0\.337 m',
+        '10=stick right 0 -1 150','10.3=stick right 1 0 150',
+        '10.8=stick right 0 -1 150','11.1=xr right/a 1 150','11.6=xr right/a 1 150',
+        '12.1=stick right 0 -1 150','12.4=xr right/a 1 150',
+        '12.8=stick right 0 -1 150','13.1=xr right/a 1 150')
+        Expect=@('XR: menu at 1\.20 m, 13 rows, row pitch 0\.063 m, top row \+0\.369 m',
             'XR: menu Recenter$','XR: menu Gun -> Arcade gun','XR: menu Gun -> Zapper',
             'XR: menu Gun angle -> \+1$','XR: menu Reload -> Point off-screen$',
-            'XR: menu Laser -> Off$','XR: menu Haptics -> Strong$','XR: menu World size -> 0\.121$',
+            'XR: menu Hands -> P1 left hand - P2 right hand$','XR: menu Laser -> Off$','XR: menu Haptics -> Strong$','XR: menu World size -> 0\.121$',
             'XR: menu Panel distance -> 45$','XR: menu Wider view -> Off \(next start\)$',
             'XR: how to play on$','XR: how to play off \(chosen\)$','XR: menu quit armed$',
             'XR: menu Resume$','XR: menu closed \(resumed\)$')
         Reject=@('XR: menu quit$','XR: player [12] reload button','Light gun P[12] at .*start 1','XR: player [12] shot') }
-    persistence=@{ Seconds=14; Config=$base; At=@('2=xr left/menu 1 150',
+    persistence=@{ Seconds=15; Config=$base; At=@('2=xr left/menu 1 150',
         '3=stick right 0 -1 150','3.4=stick right 0 -1 150','3.8=stick right 0 -1 150',
         '4.2=stick right 1 0 150','4.7=stick right 0 -1 150','5=stick right -1 0 150',
-        '5.5=stick right 0 -1 150','6=stick right 1 0 150',
-        '6.5=stick right 0 -1 150','7=stick right -1 0 150',
-        '7.5=stick right 0 -1 150','8=stick right 1 0 150',
-        '8.5=stick right 0 -1 150','9=stick right 1 0 150',
-        '9.5=stick right 0 -1 150','10=stick right 1 0 150','12=xr right/b 1 150')
+        '5.5=stick right 0 -1 150','6=stick right 1 0 150','6.3=stick right 0 -1 150','6.8=stick right 1 0 150',
+        '7.3=stick right 0 -1 150','7.8=stick right -1 0 150',
+        '8.3=stick right 0 -1 150','8.8=stick right 1 0 150',
+        '9.3=stick right 0 -1 150','9.8=stick right 1 0 150',
+        '10.3=stick right 0 -1 150','10.8=stick right 1 0 150','12.8=xr right/b 1 150')
         Expect=@('XR: menu Gun angle -> \+2$','XR: menu Reload -> Shoot off-screen$',
-            'XR: menu Laser -> On$','XR: menu Haptics -> Normal$','XR: menu World size -> 0\.133$',
+            'XR: menu Hands -> P1 right hand - P2 left hand$','XR: menu Laser -> On$','XR: menu Haptics -> Medium$','XR: menu World size -> 0\.133$',
             'XR: menu Panel distance -> 50$','XR: menu Wider view -> On \(next start\)$','XR: menu closed \(resumed\)$')
         Reject=@('XR: player [12] reload button'); Requires='menu' }
     labels=@{ Seconds=16; Config=$base+$defaults; Visible=$true; At=@('2=xr left/menu 1 150',
@@ -105,10 +105,10 @@ $scenarios=[ordered]@{
             'XR: labels set: left: Menu - P2 Start \(hold: Menu\), Pad click - P2 Reload, Trigger - P2 Shoot, Stick - Recenter$',
             'XR: menu open \(paused\)$') }
     pointer=@{ Seconds=14; Config=$base+$defaults; Visible=$true;
-        At=@('2=xr left/menu 1 150',"3=pose right 0.18 1.3 -0.35 $(Get-MenuAim 5 .75)",
+        At=@('2=xr left/menu 1 150',"3=pose right 0.18 1.3 -0.35 $(Get-MenuAim 6 .75)",
             '3.5=xr right/trigger 1 150','4=shot laser-off',
             "5=pose left -0.18 1.3 -0.35 $(Get-MenuAim 4 .75 -Left)",'5.5=xr left/trigger 1 150','6=shot left-pointer',
-            "7=pose right 0.18 1.3 -0.35 $(Get-MenuAim 10 .5)",'8=xr right/trigger 1 150','9=xr right/trigger 1 150',
+            "7=pose right 0.18 1.3 -0.35 $(Get-MenuAim 11 .5)",'8=xr right/trigger 1 150','9=xr right/trigger 1 150',
             "10=pose left -0.18 1.3 -0.35 $(Get-MenuAim 0 .5 -Left)",'10.5=xr left/trigger 1 150')
         Expect=@('XR: menu pointer click on Laser .*\(right hand\)','XR: menu Laser -> Off$',
             'XR: menu pointer click on Reload .*\(left hand\)','XR: menu Reload -> Point off-screen$',
@@ -195,10 +195,10 @@ function Invoke-Scenario([string]$name) {
 }
 function Test-Menu {
     Invoke-Scenario 'menu'
-    Assert-Config 'menu' @{'vr.GunAngle'='1';'vr.Reload'='1';'vr.Laser'='no';'vr.Haptics'='3';
+    Assert-Config 'menu' @{'vr.GunAngle'='1';'vr.Reload'='1';'vr.Laser'='no';'vr.Haptics'='strong';'vr.P1Hand'='left';
         'vr.WorldScale'=[double]0.121;'vr.HudDepth'=[double]45;'vr.Widen'='no';'vr.GunFile'='zapper'}
     Assert-Count 'menu' 'XR: menu quit armed$' 1
-    Assert-Count 'menu' 'XRSIM: haptic right 0\.048 1\.000' 1
+    Assert-Count 'menu' 'XRSIM: haptic right 0\.072 1\.000' 1
     if(-not $Reuse){Assert-Restored 'menu'}
 }
 if($Plan) {
@@ -218,7 +218,7 @@ foreach($name in $Only) {
             try {
                 if(-not $Reuse){Copy-Item -LiteralPath (Join-Path (Get-Dir 'menu') 'emu.cfg.after') -Destination $cfg -Force}
                 Invoke-Scenario $name
-                Assert-Config $name @{'vr.GunAngle'='2';'vr.Reload'='0';'vr.Laser'='yes';'vr.Haptics'='2';
+                Assert-Config $name @{'vr.GunAngle'='2';'vr.Reload'='0';'vr.Laser'='yes';'vr.Haptics'='medium';'vr.P1Hand'='right';
                     'vr.WorldScale'=[double]0.1331;'vr.HudDepth'=[double]50;'vr.Widen'='yes'}
             } finally {
                 if(-not $Reuse){if($had){[IO.File]::WriteAllBytes($cfg,$bytes)}elseif(Test-Path -LiteralPath $cfg){Remove-Item -LiteralPath $cfg}}

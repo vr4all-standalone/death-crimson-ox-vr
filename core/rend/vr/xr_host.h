@@ -14,8 +14,9 @@
 namespace vr::xr
 {
 
-// What a hand holds (holds()): its controller (drawn, with the how-to-play labels before play), or a gun.
-enum class Holds { Controller, Gun };
+// What a hand holds (holds()): its controller (drawn, with the how-to-play labels before play), a gun, or
+// nothing (a gun's hand in the game's cutscenes: no gun, no controller, no laser).
+enum class Holds { Controller, Gun, Nothing };
 
 struct Eye
 {
@@ -56,11 +57,16 @@ void recenter();
 // opens, the game's activity finishes); on the PC Flycast exits (dc_exit, at the next applyPause).
 void quitToStart();
 // What a hand holds now (0 left, 1 right). A game starts with a controller in each hand and the
-// labels on (xr_labels.h). Player 1's gun hand (the right, or the hand whose trigger was pulled:
-// the single gun's move) holds the gun from the first right Start or trigger pull, the labels going
-// then; the left holds player 2's gun while player 2 is in. In single play the other hand holds its
-// controller. Haptics go to the gun's hand, so this is where a gun is drawn. Render thread.
+// labels on (xr_labels.h). Player 1's gun hand (player 1's, p1Hand(), or the hand whose trigger was
+// pulled: the single gun's move) holds the gun from player 1's first Start or trigger pull, the labels
+// going then; the other holds player 2's gun while player 2 is in. In single play the other hand holds
+// its controller (not drawn once play starts). In the game's cutscenes a hand that holds a gun holds
+// nothing instead, until play resumes. Haptics go to the gun's hand, so this is where a gun is drawn.
+// Render thread.
 Holds holds(int hand);
+// Player 1's controller (vr.P1Hand, the menu's Hands): 1 the right (the default), 0 the left. Its Start
+// and B are player 1's and, with two players, its hand holds player 1's gun; the other's are player 2's.
+int p1Hand();
 // The menu's How to play (xr_menu.h) on or off: while on, both hands hold their controllers with the
 // labels, as at the start (the guns leave the hands). The menu closing, however it closes, turns it
 // off and the hands get back what they held. Logs "XR: how to play on" / "... off (<why>)". Render thread.
@@ -68,6 +74,9 @@ void setHowToPlay(bool on, const char *why);
 bool howToPlayOn();
 // A shot's knock in a hand, at vr.Haptics' strength as it is now: the menu's sample of it.
 void sampleKnock(int hand);
+// vr.Haptics (the menu's Haptics) as a level: 0 off, 1 light, 2 medium (the default), 3 strong. 1.2's saved
+// 0-3 (off, low, normal, strong) and its words read as off, light, medium, strong; anything else as medium.
+int hapticsLevel();
 #else
 inline bool enabled() { return false; }
 inline bool frame() { return false; }
@@ -80,9 +89,11 @@ inline void applyPause() {}
 inline void recenter() {}
 inline void quitToStart() {}
 inline Holds holds(int) { return Holds::Gun; }
+inline int p1Hand() { return 1; }
 inline void setHowToPlay(bool, const char *) {}
 inline bool howToPlayOn() { return false; }
 inline void sampleKnock(int) {}
+inline int hapticsLevel() { return 2; }
 #endif
 
 }

@@ -6,7 +6,7 @@ A standalone Quest and PC VR port in development for **Lupin the Third: The Shoo
 [Flycast](https://github.com/flyinghead/flycast). It carries over the CM VR menus and features,
 using Lupin's own camera, game state and gun model.
 
-**Development build.** The port includes the CM 1.2 menu, controller controls and labels,
+**Development build.** The port includes the final CM 1.2 menus, controller controls and labels,
 gun choices, first-run extraction, reload modes, haptics, dual wielding and independent setup.
 Lupin uses its own guarded camera, original hit-test lens, two-player calibration and native
 accepted-round state. [Validation evidence](hotd2-vr/notes/lupin-validation.md) separates
@@ -114,7 +114,9 @@ or headset performance result yet.
 
 ## Controls and parity target
 
-Bindings match CM 1.2; feedback and joining use Lupin's native game state:
+Bindings match the final CM 1.2 controls; feedback and joining use Lupin's native game state.
+The default below assigns P1 to the right hand. **Hands** swaps P1/P2 Start buttons, dual-player
+reload buttons, gun hands and controller labels. Single-player shooting still follows either trigger:
 
 | Quest Touch input | Action |
 |---|---|
@@ -129,8 +131,18 @@ Bindings match CM 1.2; feedback and joining use Lupin's native game state:
 | Stick | Game D-pad |
 
 The paused menu preserves this exact order: Resume, Recenter, Gun, Gun angle,
-Reload, Laser, Haptics, World size, Panel distance, Wider view, How to play, Quit. It preserves either-hand pointer selection, stick repeat, a live gun preview, three-second Quit
+Reload, Hands, Laser, Haptics, World size, Panel distance, Wider view, How to play, Quit. It preserves either-hand pointer selection, stick repeat, a live gun preview, three-second Quit
 confirmation, and simulation/audio pause with live head tracking.
+
+**Hands** offers P1 right/P2 left or P1 left/P2 right and saves immediately. With two players
+active, changing it swaps their guns after closing the menu; a held trigger must be released.
+How to play updates the labels for Touch, Index, Vive and WMR. Trigger labels sit above Stick
+labels where the controller has a stick. During noninteractive story scenes both hands are empty;
+the guns return for play, and How to play can still show the controls while paused.
+
+**Haptics** offers Off, Light, Medium (default) and Strong. Light keeps the original normal
+pulse, Medium lasts 1.6 times as long and Strong 2.4 times; Off keeps visual recoil and flash.
+Old numeric 0/1/2/3 and low/normal settings remain readable. New choices save as words.
 
 The two drawing and hit-test lenses remain separate when Wider view is enabled: the
 train is drawn at about 80 degrees while shots keep its original 40-degree hit test.
@@ -195,6 +207,8 @@ Additional isolated checks (set `VRLGH_GAMES` to a private original-set copy fir
 .\hotd2-vr\lupin-aim.ps1
 .\hotd2-vr\lupin-aim.ps1 -Stock
 .\hotd2-vr\lupin-ui-accept.ps1
+.\hotd2-vr\lupin-settings-test.ps1
+.\hotd2-vr\lupin-cm-sync.ps1
 ```
 
 The Java suites are `LupinFilesTest` and `LupinStartStatusTest`. They cover original layout,

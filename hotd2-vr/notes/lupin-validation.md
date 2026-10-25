@@ -9,8 +9,8 @@ Original GDS-0018 only, set lupinshoo. Independent source E:\___flattovrdev\lupi
 |1,2|Stereo reconstruction, tracked view, guarded live camera and independent original hit lens; widening|XR simulator gameplay/pause; causal front/rear head hits; original lens2756/7281; production lp-aim-wide and lp-aim-stock render headers|
 |3|Both-player calibration, corners/edges/center and native reload sentinel; narrow original-marker removal|23 input/calibration checks;32 actual game VM points across widening modes (sampled max1px/axis);10 causal boundary cases;40 marker UV positives/119 HUD negatives|
 |4|Inverse-depth HUD, flat screens, preserved near floor/walls, P2 prompt separation|lp-hud150s and instruction/text inspection;352pass P2 audit, lifecycle0-only suppression; actual-pistol downward/head-translation captures; extreme poses expose black outside the source game's drawn geometry|
-|5,14|Twelve-row paused menu, values, pointers, Quit confirmation, persisted settings|All10 lp-ui scenarios pass; real second-launch persistence; frozen image diffs0 and live head redraw|
-|6,12|Touch/Index/Vive/WMR bindings and labels, hand switching, story controllers without labels|lp-ui controls/profiles/labels; lp-feedback story on/off and controller/gun handoff|
+|5,14|Thirteen-row paused menu, values, pointers, Quit confirmation, persisted settings|All10 lp-ui scenarios pass; real second-launch persistence; frozen image diffs0 and live head redraw|
+|6,12|Touch/Index/Vive/WMR bindings and labels, hand switching, empty hands during noninteractive story scenes|lp-ui controls/profiles/labels; lp-feedback story on/off and empty-hands/gun handoff|
 |7,8|Original-game pistol, licensed Arcade/Zapper, custom-model infrastructure, atomic isolated cache|Complete24-strip/86-triangle25840byte pistol;16 model/cache unit tests;4 cache runtime cases;7 renderer-consumption regression checks plus3 rejected/valid cache runtime cases; actual licensed Arcade/Zapper/pistol frames|
 |9,10|Accepted-round recoil/flash/haptics, both magazines and reload modes, empty feedback|lp-feedback; lp-empty native watches: P1eight/P2seven kicks, exactly two empty clicks each, independent sensor reloads and no empty kicks; lp-reload-point: P1three/P2two automatic reloads at expected exits, full-magazine/menu suppression, held Point-mode exit and manual Y|
 |11|Real P2 join/leave, separate magazines/feedback, single-gun return|lp-feedback and lp-empty native active flags, P2Start and one-gun return; measured prompt filter|
@@ -35,3 +35,29 @@ The user subsequently requested the final minor CM updates after both sessions f
 Private `build-win/lupin-model-controls.run.log`: all five final cases pass (`lp-custom-select-real`, `lp-custom-persist-real`, `lp-custom-override-real`, `lp-angle-plus-real`, `lp-angle-minus-real`). Saved mixed-case selection survives insertion of an earlier-sorted GLB. User ZaPpEr overrides the bundled file. Missing sidecar uses the built-in controller; missing user side falls to the corresponding bundled side while retaining the other custom side. Gun angle clamps to ±30 and steps to ±29/back without ±31. WorldScale0.11->0.128 and HandScale0.68->0.77 via grip/stick. Private directories/settings restored and licensed model hashes unchanged.
 
 Native standalone Release execution allows the loaded Lupin boot ID and rejects Confidential Mission through the ordinary load-error path before Event::Start/VR profile initialization. Fresh logs are required for both cases; only each launched hidden PID is stopped. Final run evidence is included in the build verification report.
+
+## Final CM feature synchronization (2026-10-25)
+
+The user authorized continuing while Claude only publishes the finished CM work. The comparison
+covers reference e6bd81a97 through CM331063b79. The four applicable runtime changes are the
+Hands row/P1 controller assignment, empty story hands, haptics Off/Light/Medium/Strong including
+legacy-value migration and longer pulses, and Trigger-above-Stick labels. Lupin camera, original
+hit-test lens/calibration, native shot state, movie detection, pistol/cache guards and app identity
+remain the original port's measured implementation. The menu now has13 rows, top row+0.369m.
+
+CM's GitHub/VR4ALL publishing, CM card/banner screenshots, version numbers and project-folder
+rename are specific to that project. They add no Lupin runtime capability and are not copied as
+Lupin publication or artwork claims. Lupin's independent setup remains intact.
+
+The updated13-row menu first failed against the initial12-row player, then passed after the
+adaptation. The focused production-function suite passes83 settings, pulse and held-state checks.
+Final runtime evidence, committed source and refreshed package hashes are recorded in
+`dist/cm-sync-verification.json`; its absence means the synchronization delivery gates remain
+pending. All physical headset checklist items remain untested.
+
+
+Independent review found an extra downward reload possible when swapping hands with a controller
+already held down. A real production-block regression failed before the fix, then all83 focused
+checks passed after the downward latch was transferred with its physical controller. All four
+latch combinations are covered. The reviewer rechecked and closed the finding. A final-binary
+runtime scenario also holds both controllers down through the swap, requiring no extra reload.

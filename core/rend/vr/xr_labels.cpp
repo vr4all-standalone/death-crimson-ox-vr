@@ -5,6 +5,7 @@
 */
 #include "xr_labels.h"
 #include "xr_controllers.h"
+#include "xr_host.h"
 #include "xr_own.h"
 #include "xr_panel.h"
 #include "log/Log.h"
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -34,7 +36,8 @@ struct Label
 // controller's, so a PC controller's button points at the place doing the same job: Start at A (X
 // on the left), the reload at B (Y), the menu at the menu button. Before player 2 joins, the left
 // trigger shoots for player 1 (the one gun goes to the hand that pulls); the label still says P2,
-// the user's text. Roboto Bold, the panels' font, has no triple bar (U+2261): Touch's menu button
+// the user's text. With vr.P1Hand left (the menu's Hands) the same buttons name the other player
+// (KindsP1Left): player 1's on the left, player 2's on the right. Roboto Bold, the panels' font, has no triple bar (U+2261): Touch's menu button
 // says "Menu".
 struct Words
 {
@@ -62,13 +65,38 @@ const Words Kinds[] {
 		{ { controllers::B, "Pad click - P1 Reload" }, { controllers::A, "Menu - P1 Start" }, { controllers::Trigger, "Trigger - P1 Shoot" },
 			{ controllers::Stick, "Stick - Laser" } } } },
 };
+// vr.P1Hand left: each hand's buttons its own player's, P1 on the left and P2 on the right (the same
+// buttons and order as Kinds)
+const Words KindsP1Left[] {
+	{ "/interaction_profiles/oculus/touch_controller", {
+		{ { controllers::Y, "Y - P1 Reload" }, { controllers::X, "X - P1 Start" }, { controllers::Menu, "Menu" },
+			{ controllers::Trigger, "Trigger - P1 Shoot" }, { controllers::Stick, "Stick - Recenter" } },
+		{ { controllers::B, "B - P2 Reload" }, { controllers::A, "A - P2 Start" }, { controllers::Trigger, "Trigger - P2 Shoot" },
+			{ controllers::Stick, "Stick - Laser" } } } },
+	{ "/interaction_profiles/valve/index_controller", {
+		{ { controllers::Y, "B - P1 Reload" }, { controllers::X, "A - P1 Start" }, { controllers::Menu, "Pad squeeze - Menu" },
+			{ controllers::Trigger, "Trigger - P1 Shoot" }, { controllers::Stick, "Stick - Recenter" } },
+		{ { controllers::B, "B - P2 Reload" }, { controllers::A, "A - P2 Start" }, { controllers::Trigger, "Trigger - P2 Shoot" },
+			{ controllers::Stick, "Stick - Laser" } } } },
+	{ "/interaction_profiles/htc/vive_controller", {
+		{ { controllers::Y, "Pad click - P1 Reload" }, { controllers::X, "Menu - P1 Start (hold: Menu)" },
+			{ controllers::Trigger, "Trigger - P1 Shoot" } },
+		{ { controllers::B, "Pad click - P2 Reload" }, { controllers::A, "Menu - P2 Start" }, { controllers::Trigger, "Trigger - P2 Shoot" } } } },
+	{ "/interaction_profiles/microsoft/motion_controller", {
+		{ { controllers::Y, "Pad click - P1 Reload" }, { controllers::X, "Menu - P1 Start (hold: Menu)" },
+			{ controllers::Trigger, "Trigger - P1 Shoot" }, { controllers::Stick, "Stick - Recenter" } },
+		{ { controllers::B, "Pad click - P2 Reload" }, { controllers::A, "Menu - P2 Start" }, { controllers::Trigger, "Trigger - P2 Shoot" },
+			{ controllers::Stick, "Stick - Laser" } } } },
+};
+static_assert(std::size(KindsP1Left) == std::size(Kinds), "a P1-left set for each controller kind");
 // The log's order, the README's: Start, the reload, the shot, the stick, the menu (by Button: A, B, X, Y, Menu, Stick,
 // Trigger, Grip)
 constexpr int ReadingOrder[controllers::Buttons] { 0, 1, 0, 1, 4, 3, 2, 5 };
 
 // A label's letters (its picture's pixels) and its height in the room: letters ~7.5 mm high, about
 // as sharp as a Quest 3 shows them at 40 cm. The column: from the hand's outermost button, and from
-// one label to the next at least. The stick's label: over the column's top and the stick.
+// one label to the next at least. The stick's label: over the column's top and the stick; the trigger's
+// one Pitch over that.
 constexpr float Px = 40.f;
 constexpr float Height = 0.016f;
 constexpr float Gap = 0.025f;
@@ -117,12 +145,14 @@ std::vector<Logged> logged[2];
 const Words *setLogged[2] {};
 const char *const HandName[2] { "left", "right" };
 
+// The words for a profile, by vr.P1Hand (p1Hand(): 0 left)
 const Words& wordsFor(const char *profile)
 {
-	for (const Words& words : Kinds)
+	const Words (&kinds)[std::size(Kinds)] = p1Hand() == 0 ? KindsP1Left : Kinds;
+	for (const Words& words : kinds)
 		if (profile != nullptr && !strcmp(profile, words.profile))
 			return words;
-	return Kinds[0];
+	return kinds[0];
 }
 
 // The eye of a projection (room space): the point it sends to x = y = w = 0.
@@ -155,7 +185,9 @@ void facing(const glm::vec3& at, const glm::vec3& eye, const glm::vec3& fallback
 
 // Where one hand's labels go, seen from `eye`: a column beside the hand's outermost button (the
 // right hand's to its right as seen, the left's to its left), in the list's order, Pitch apart at
-// least and centred on their buttons' height; the stick's above the column's top, over the stick.
+// least and centred on their buttons' height; the stick's above the column's top, over the stick, and
+// the trigger's right on top of the stick's (1.2 round 2, the user's ask: not under A or X), its line to
+// its outer end, past the stick's. A list without a stick (the Vive wand's) keeps the trigger's in the column.
 void layOut(Layout& layout, int hand, const glm::mat4& grip, const Words& words, const glm::vec3& eye)
 {
 	layout.placed.clear();
@@ -178,11 +210,12 @@ void layOut(Layout& layout, int hand, const glm::mat4& grip, const Words& words,
 		outer = std::max(outer, side * planeX(p));
 	const float columnX = side * (outer + Gap);
 
+	const bool stacked = std::any_of(list.begin(), list.end(), [](const Label& l) { return l.button == controllers::Stick; });
 	std::vector<size_t> column;
 	std::vector<float> ys;
 	float buttonsY = 0.f;
 	for (size_t i = 0; i < list.size(); i++)
-		if (list[i].button != controllers::Stick)
+		if (list[i].button != controllers::Stick && !(stacked && list[i].button == controllers::Trigger))
 		{
 			float y = planeY(at[i]);
 			buttonsY += y;
@@ -200,23 +233,32 @@ void layOut(Layout& layout, int hand, const glm::mat4& grip, const Words& words,
 		for (float& y : ys)
 			y += shift;
 	}
-	auto place = [&](size_t i, float x, float y, float alignX, const glm::vec3& to) {
+	// toOuter: the line to the label's outer end (side), not to `to`
+	auto place = [&](size_t i, float x, float y, float alignX, const glm::vec3& to, bool toOuter = false) {
 		int w, h;
 		const unsigned texture = textTexture(list[i].text, Px, TextColour, w, h);
 		if (texture == 0 || h == 0)
 			return;
 		const float hy = Height * 0.5f, hx = hy * w / h;
-		layout.placed.push_back({ list[i].text, room(x + alignX * hx, y), hx, hy, at[i], to });
+		layout.placed.push_back({ list[i].text, room(x + alignX * hx, y), hx, hy, at[i],
+				toOuter ? room(x + alignX * hx + side * hx, y) : to });
 	};
 	for (size_t k = 0; k < column.size(); k++)
 		place(column[k], columnX, ys[k], side, room(columnX, ys[k]));
+	float stickX = 0.f, stickY = 0.f;
 	for (size_t i = 0; i < list.size(); i++)
 		if (list[i].button == controllers::Stick)
 		{
 			const float x = planeX(at[i]);
 			const float y = std::max(planeY(at[i]), ys.empty() ? -1.f : ys.front()) + StickRise;
 			place(i, x, y, 0.f, room(x, y - Height * 0.5f));
+			stickX = x;
+			stickY = y;
 		}
+	if (stacked)
+		for (size_t i = 0; i < list.size(); i++)
+			if (list[i].button == controllers::Trigger)
+				place(i, stickX, stickY + Pitch, 0.f, glm::vec3(0.f), true);
 }
 
 // A quad facing `eye` at `centre`, its top towards the room's up.
