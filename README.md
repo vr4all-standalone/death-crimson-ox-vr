@@ -5,7 +5,7 @@
 # Death Crimson OX VR
 ### SEGA NAOMI Light-Gun Action · Standalone Meta Quest & PC VR
 
-[![Release v1.0.1](https://img.shields.io/badge/Release-v1.0.1_Experimental-b95362?style=for-the-badge)](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest)
+[![Release v1.0.2](https://img.shields.io/badge/Release-v1.0.2_Experimental-b95362?style=for-the-badge)](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest)
 [![Quest and PC VR](https://img.shields.io/badge/Headset-Quest_%C2%B7_PC_VR_OpenXR-blue?style=for-the-badge)](#quest-setup)
 [![Original game required](https://img.shields.io/badge/Your_Game-deathcoxj_Japan_Rev_A-orange?style=for-the-badge)](#bring-your-own-game)
 
@@ -84,8 +84,8 @@ The **Two players** setting defaults to **P1 left / P2 right**. Choose **P1 righ
 | Control | Default action |
 | --- | --- |
 | Either trigger, single-player | Move the gun to that hand and fire P1 |
-| Left X | P1 Start |
-| Right A | P2 Start / join |
+| Left X, solo | P2 Start / join |
+| Right A, solo | P1 Start |
 | Y / B | Reload; either in solo play, each player's own in two-player play |
 | Left Menu | Pause / VR settings |
 | Left stick click | Recenter |
@@ -93,7 +93,7 @@ The **Two players** setting defaults to **P1 left / P2 right**. Choose **P1 righ
 | Grip + stick up/down | World size |
 | Grip + stick left/right | Gun size |
 
-With the assignment reversed, A/B belong to P1 and X/Y to P2. With only one controller tracked, or when joining is unavailable, either Start can start P1. Held triggers must be released before firing after joining, leaving, swapping, restarting or preparation.
+Solo Start roles match Confidential Mission: A/right starts P1 and X/left joins P2. Joining applies **Two players** immediately: P1 left / P2 right by default, or the reverse when selected. With two players in, each hand's Start belongs to its assigned player; a held press keeps its original player until released, including through joining, leaving and swapping. When joining is unavailable, X does not start P1. Held triggers must be released before firing after joining, leaving, swapping, restarting or preparation.
 
 **Shoot off-screen** is the default reload mode; **Point off-screen** is selectable. Native ammo refills caused by damage remain part of the original game's behavior. Controller labels explain the active assignment and solo trigger behavior.
 
@@ -118,3 +118,7 @@ The release contains only `death-crimson-ox-vr-quest.apk`, `death-crimson-ox-vr-
 Flycast by flyinghead and contributors; mikermak's [HOTD2 VR/OpenXR work](https://github.com/mikermak/hotd2-vr); Confidential Mission VR and Lupin VR adaptations. Preserve `LICENSE`, `README.flycast.md` and distributed software/model notices. Bundled models retain their own licenses and credits. The native game pistol is generated from each player's own game and is not redistributed.
 
 The [banner provenance](hotd2-vr/assets/death-banner.md) identifies the promotional artwork; it is not a headset screenshot. This unofficial project is not affiliated with Ecole, Sammy, Sega or Meta.
+
+### Player assignment regression
+
+Run `powershell -NoProfile -File hotd2-vr/player-assignment-test.ps1` on a Windows development machine with Visual Studio C++ tools. It compiles the production hand policy, Start ownership, join/leave and menu code and checks both layouts against Confidential Mission behavior.
