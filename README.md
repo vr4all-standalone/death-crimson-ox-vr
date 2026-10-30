@@ -5,8 +5,6 @@
 # Death Crimson OX VR
 ### SEGA NAOMI Light-Gun Action · Standalone Meta Quest & PC VR
 
-[☕ Donate to VR4ALL](https://ko-fi.com/vr4all)
-
 [![Release v1.0.6](https://img.shields.io/badge/Release-v1.0.6_Experimental-b95362?style=for-the-badge)](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest)
 [![Quest and PC VR](https://img.shields.io/badge/Headset-Quest_%C2%B7_PC_VR_OpenXR-blue?style=for-the-badge)](#quest-setup)
 [![Original game required](https://img.shields.io/badge/Your_Game-deathcoxj_Japan_Rev_A-orange?style=for-the-badge)](#bring-your-own-game)
@@ -15,7 +13,9 @@
 
 [Checksums](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest/download/SHA256SUMS.txt) · [All releases](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases)
 
-**[🌐 VR4ALL — Standalone VR Mod Installer](https://github.com/vr4all-standalone/vr4all-standalone-vr-mod-installer)**
+**[🌐 VR4ALL — Standalone VR Mod Installer](https://github.com/vr4all-standalone/vr4all-standalone)**
+
+[☕ Donate to VR4ALL](https://ko-fi.com/vr4all)
 
 </div>
 
@@ -69,7 +69,7 @@ No game, BIOS or extracted native gun data is included in the downloads or sourc
 
 ## Quest setup
 
-1. Install through [VR4ALL](https://github.com/vr4all-standalone/vr4all-standalone-vr-mod-installer), or sideload the Quest APK with your usual installer.
+1. Install through [VR4ALL](https://github.com/vr4all-standalone/vr4all-standalone), or sideload the Quest APK with your usual installer.
 2. Put your verified ZIPs in the headset's `Download` folder. VR4ALL transfers them to the canonical paths above and enables file access.
 3. Open **Death Crimson OX VR** under Unknown Sources and grant file access if requested. Its setup screen enables Play when the original set and BIOS pass validation.
 4. First launch prepares the native pistol from those files. B or Y skips it for this session; the Arcade gun remains available. The next game launch can retry.
