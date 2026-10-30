@@ -1,5 +1,5 @@
 <#
-  Packages Death Crimson OX VR builds for the Quest and PC (implementation remains in progress)
+  Packages Death Crimson OX - VR4ALL builds for the Quest and PC (implementation remains in progress)
   in dist\ (packaging checks do not establish gameplay or headset validation):
 
     death-crimson-ox-vr-quest.apk   the Quest app (Quest 3, 3S, 2, Pro)
@@ -11,7 +11,7 @@
   is made on the spot. Both are checked for that (the names in their file lists: discs, keys,
   rips, frame grabs, models made from a game), and the APK for its signer: signed with the public
   debug key (no release key, see make-release-key.ps1) it is refused, since anyone could sign an
-  "update" of the app with that key. The APK is also checked for being Death Crimson OX VR
+  "update" of the app with that key. The APK is also checked for being Death Crimson OX - VR4ALL
   (its package, version and label, and its start screen the only entry in the headset's library),
   and the zip for holding exactly its files, with a README.txt that names no other game.
 
@@ -29,7 +29,7 @@
   (core\deps\cgltf\LICENSE) in it; -CheckOnly checks that too.
 
   A release is built from a commit, the one its published source is: the working tree must be
-  clean (the gamesdk submodule's local change aside), and the APK's versionName (1.0.5-g<commit>),
+  clean (the gamesdk submodule's local change aside), and the APK's versionName (1.0.6-g<commit>),
   its libflycast.so and flycast.exe must all name HEAD (a -SkipBuild after a new commit fails
   that). -AllowDebugKey test builds skip both checks.
 
@@ -51,8 +51,8 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 # The app: its application ID, label and version (shell\android-studio\flycast\build.gradle.kts and
 # src\vr\AndroidManifest.xml), its library entry, and the PC zip's start script (hotd2-vr\assets).
 $appId = 'com.vrlightgunhub.deathcrimsonox'
-$appLabel = 'Death Crimson OX VR'
-$appVersion = '1.0.5'
+$appLabel = 'Death Crimson OX - VR4ALL'
+$appVersion = '1.0.6'
 $appLauncher = 'com.flycast.emulator.DeathCrimsonStartActivity'
 $playCmd = 'Play Death Crimson OX.cmd'
 
@@ -189,7 +189,7 @@ function Read-ZipEntry([string]$archive, [string]$name) {
 # The policy-disabled executable is for local research only. Its optimized binary omits
 # the rejection diagnostic; require the compiled guard in both platform artifacts.
 function Test-StandalonePolicy([byte[]]$bytes) {
-    $bytes -and [Text.Encoding]::ASCII.GetString($bytes).Contains('Death Crimson OX VR supports the verified Death Crimson OX Japan Rev A cartridge set (deathcoxj.zip).')
+    $bytes -and [Text.Encoding]::ASCII.GetString($bytes).Contains('Death Crimson OX - VR4ALL supports the verified Death Crimson OX Japan Rev A cartridge set (deathcoxj.zip).')
 }
 # A built binary names this commit: the version core\version.h gave it (v<tag>-<n>-g<commit>).
 function Test-NamesCommit([string]$what, [byte[]]$bytes, [string]$hash) {
@@ -227,7 +227,7 @@ function Find-AppIdentityFault([string[]]$badgingLines, [string[]]$manifestTree,
     $badging = $badgingLines | Where-Object { $_ -match '^package:' } | Select-Object -First 1
     $wantVersion = [regex]::Escape("$appVersion-g") + $(if ($testBuild) { '[0-9a-f]+' } else { [regex]::Escape($shortHash) })
     if ($badging -notmatch "^package: name='$([regex]::Escape($appId))'") { "the package is not $appId" }
-    if ($badging -notmatch "versionCode='6'") { 'the versionCode is not 6' }
+    if ($badging -notmatch "versionCode='7'") { 'the versionCode is not 7' }
     if ($badging -notmatch "versionName='$wantVersion'") {
         "the versionName is not $appVersion-g$(if ($testBuild) { '<commit>' } else { $shortHash })"
     }
@@ -421,7 +421,7 @@ rend.NativeDepthInterpolation = yes
 vr.Xr = yes
 '@
 $readme = @'
-Death Crimson OX VR, PC development build
+Death Crimson OX - VR4ALL, PC development build
 
 Implementation in progress. See the source validation report and physical headset checklist
 for the current verified scope. This build inherits Flycast and mikermak's hotd2-vr

@@ -5,7 +5,7 @@
 # Death Crimson OX VR
 ### SEGA NAOMI Light-Gun Action · Standalone Meta Quest & PC VR
 
-[![Release v1.0.5](https://img.shields.io/badge/Release-v1.0.5_Experimental-b95362?style=for-the-badge)](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest)
+[![Release v1.0.6](https://img.shields.io/badge/Release-v1.0.6_Experimental-b95362?style=for-the-badge)](https://github.com/vr4all-standalone/death-crimson-ox-vr/releases/latest)
 [![Quest and PC VR](https://img.shields.io/badge/Headset-Quest_%C2%B7_PC_VR_OpenXR-blue?style=for-the-badge)](#quest-setup)
 [![Original game required](https://img.shields.io/badge/Your_Game-deathcoxj_Japan_Rev_A-orange?style=for-the-badge)](#bring-your-own-game)
 
@@ -19,9 +19,9 @@
 
 ---
 
-## Update v1.0.5
+## Update v1.0.6
 
-Validated automatic entry, full P1 red/P2 blue Arcade body and grip with grey details preserved, and a new gun-angle zero matching the old -10 degree pose. Legacy angles reset once; later adjustments persist. [Release notes](docs/releases/v1.0.5.md).
+Validated automatic entry, full P1 red/P2 blue Arcade body and grip with grey details preserved, and a new gun-angle zero matching the old -10 degree pose. Legacy angles reset once; later adjustments persist. [Release notes](docs/releases/v1.0.6.md).
 
 ## Overview
 

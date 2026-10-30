@@ -42,7 +42,7 @@ function Archive([string]$name, [hashtable]$entries) {
 }
 try {
     Check 'Death Crimson application ID' ($appId -eq 'com.vrlightgunhub.deathcrimsonox')
-    Check 'Death Crimson label' ($appLabel -eq 'Death Crimson OX VR')
+    Check 'Death Crimson label' ($appLabel -eq 'Death Crimson OX - VR4ALL')
     Check 'Death Crimson release base version' ($appVersion -eq '1.0.4')
     Check 'Death Crimson setup launcher' ($appLauncher -eq 'com.flycast.emulator.DeathCrimsonStartActivity')
     Check 'Death Crimson PC launcher name' ($playCmd -eq 'Play Death Crimson OX.cmd')
@@ -60,7 +60,7 @@ try {
     Check 'credited model accepted' (@(Find-UncreditedModels $archive).Count -eq 0)
     $gpl = Get-Content -LiteralPath (Join-Path $repo 'core/deps/picotcp/LICENSE.GPLv3') -Raw
     $mit = Get-Content -LiteralPath (Join-Path $repo 'core/deps/cgltf/LICENSE') -Raw
-    $licence = "Death Crimson OX VR`n$gpl`n$mit"
+    $licence = "Death Crimson OX - VR4ALL`n$gpl`n$mit"
     $archive = Archive 'licensed.zip' @{'LICENSE.txt'=$licence}
     Check 'GPL-3 and cgltf notice accepted' (-not (Find-LicenceFault $archive))
     $archive = Archive 'missing-mit.apk' @{'assets/LICENSE.txt'=$gpl}
@@ -76,14 +76,14 @@ try {
     $policyCheck = Get-Command Test-StandalonePolicy -ErrorAction SilentlyContinue
     Check 'standalone release policy validator exists' ([bool]$policyCheck)
     if ($policyCheck) {
-        Check 'standalone build policy accepted' (Test-StandalonePolicy ([Text.Encoding]::ASCII.GetBytes('Death Crimson OX VR supports the verified Death Crimson OX Japan Rev A cartridge set (deathcoxj.zip).')))
+        Check 'standalone build policy accepted' (Test-StandalonePolicy ([Text.Encoding]::ASCII.GetBytes('Death Crimson OX - VR4ALL supports the verified Death Crimson OX Japan Rev A cartridge set (deathcoxj.zip).')))
         Check 'research build policy rejected' (-not (Test-StandalonePolicy ([Text.Encoding]::ASCII.GetBytes('generic Flycast research build'))))
     }
     $tree = @('E: manifest', '  E: uses-permission', '    A: android:name(0x01010003)="com.oculus.permission.RENDER_MODEL"',
         '  E: application', '    E: activity', '      A: android:name(0x01010003)="com.flycast.emulator.DeathCrimsonStartActivity"',
         '      E: intent-filter', '        E: category', '          A: android:name(0x01010003)="android.intent.category.LAUNCHER"')
     Check 'manifest launcher parser uses activity owner' (@(Get-LauncherOwners $tree) -join ',' -eq 'com.flycast.emulator.DeathCrimsonStartActivity')
-    $badging = @("package: name='com.vrlightgunhub.deathcrimsonox' versionCode='5' versionName='1.0.4-gabc123'", "application-label:'Death Crimson OX VR'")
+    $badging = @("package: name='com.vrlightgunhub.deathcrimsonox' versionCode='5' versionName='1.0.4-gabc123'", "application-label:'Death Crimson OX - VR4ALL'")
     $hasIdentityCheck = [bool](Get-Command Find-AppIdentityFault -ErrorAction SilentlyContinue)
     Check 'APK metadata validator is independently testable' $hasIdentityCheck
     if ($hasIdentityCheck) {
@@ -93,7 +93,7 @@ try {
             @('version code', "versionCode='5'", "versionCode='9'"),
             @('base version', '1.0.4-gabc123', '1.2.0-gabc123'),
             @('commit version', '1.0.4-gabc123', '1.0.4-gdef456'),
-            @('label', 'Death Crimson OX VR', 'Confidential Mission VR'))) {
+            @('label', 'Death Crimson OX - VR4ALL', 'Confidential Mission VR'))) {
             $changed = @($badging | ForEach-Object { $_.Replace($case[1],$case[2]) })
             Check "wrong APK $($case[0]) rejected" (@(Find-AppIdentityFault $changed $tree 'abc123' $false).Count -gt 0)
         }
@@ -108,7 +108,7 @@ try {
     Check 'portable PC archive validator is independently testable' $hasPcCheck
     if ($hasPcCheck) {
         $files = @('flycast.exe','emu.cfg','README.txt','LICENSE.txt','Play Death Crimson OX.cmd')
-        $readme = 'Death Crimson OX VR. Implementation in progress. roms\deathcoxj.zip roms\naomi.zip Play Death Crimson OX.cmd'
+        $readme = 'Death Crimson OX - VR4ALL. Implementation in progress. roms\deathcoxj.zip roms\naomi.zip Play Death Crimson OX.cmd'
         $entries = @{'flycast.exe'='synthetic'; 'emu.cfg'="[config]`npvr.rend = 0`nrend.NativeDepthInterpolation = yes`nvr.Xr = yes"; 'README.txt'=$readme; 'LICENSE.txt'=$licence; 'Play Death Crimson OX.cmd'='start "" /D "%~dp0" "%~dp0flycast.exe" "%~dp0roms\deathcoxj.zip"'}
         $archive = Archive 'portable-valid.zip' $entries
         Check 'exact portable Death Crimson archive accepted' (@(Find-PcArchiveFault $archive $files).Count -eq 0)
@@ -139,7 +139,7 @@ try {
         $archive = Archive 'portable-production-templates.zip' $production
         Check 'production README config and launcher satisfy portable checks' (@(Find-PcArchiveFault $archive $files).Count -eq 0)
         Check 'packaged README explicitly marks implementation in progress' ($generatedReadme.Contains('Implementation in progress.'))
-        $entries['README.txt'] = $readme.Replace('Death Crimson OX VR','Confidential Mission VR')
+        $entries['README.txt'] = $readme.Replace('Death Crimson OX - VR4ALL','Confidential Mission VR')
         $archive = Archive 'portable-wrong-readme.zip' $entries
         Check 'stale CM README rejected' (@(Find-PcArchiveFault $archive $files).Count -gt 0)
         $entries['README.txt'] = $readme
