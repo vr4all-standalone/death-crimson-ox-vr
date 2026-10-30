@@ -43,7 +43,7 @@ function Archive([string]$name, [hashtable]$entries) {
 try {
     Check 'Death Crimson application ID' ($appId -eq 'com.vrlightgunhub.deathcrimsonox')
     Check 'Death Crimson label' ($appLabel -eq 'Death Crimson OX - VR4ALL')
-    Check 'Death Crimson release base version' ($appVersion -eq '1.0.4')
+    Check 'Death Crimson release base version' ($appVersion -eq '1.0.6')
     Check 'Death Crimson setup launcher' ($appLauncher -eq 'com.flycast.emulator.DeathCrimsonStartActivity')
     Check 'Death Crimson PC launcher name' ($playCmd -eq 'Play Death Crimson OX.cmd')
     $banned = @('roms/LUPINSHOO.ZIP','roms/deathcoxj/mpr-23514.ic1','gds-0018.cue','gds-0018.gdi',
@@ -83,16 +83,16 @@ try {
         '  E: application', '    E: activity', '      A: android:name(0x01010003)="com.flycast.emulator.DeathCrimsonStartActivity"',
         '      E: intent-filter', '        E: category', '          A: android:name(0x01010003)="android.intent.category.LAUNCHER"')
     Check 'manifest launcher parser uses activity owner' (@(Get-LauncherOwners $tree) -join ',' -eq 'com.flycast.emulator.DeathCrimsonStartActivity')
-    $badging = @("package: name='com.vrlightgunhub.deathcrimsonox' versionCode='5' versionName='1.0.4-gabc123'", "application-label:'Death Crimson OX - VR4ALL'")
+    $badging = @("package: name='com.vrlightgunhub.deathcrimsonox' versionCode='7' versionName='1.0.6-gabc123'", "application-label:'Death Crimson OX - VR4ALL'")
     $hasIdentityCheck = [bool](Get-Command Find-AppIdentityFault -ErrorAction SilentlyContinue)
     Check 'APK metadata validator is independently testable' $hasIdentityCheck
     if ($hasIdentityCheck) {
         Check 'valid Death Crimson APK metadata accepted' (@(Find-AppIdentityFault $badging $tree 'abc123' $false).Count -eq 0)
         foreach ($case in @(
             @('package', 'com.vrlightgunhub.deathcrimsonox', 'com.vrlightgunhub.confmiss'),
-            @('version code', "versionCode='5'", "versionCode='9'"),
-            @('base version', '1.0.4-gabc123', '1.2.0-gabc123'),
-            @('commit version', '1.0.4-gabc123', '1.0.4-gdef456'),
+            @('version code', "versionCode='7'", "versionCode='2147483647'"),
+            @('base version', '1.0.6-gabc123', '1.2.0-gabc123'),
+            @('commit version', '1.0.6-gabc123', '1.0.6-gdef456'),
             @('label', 'Death Crimson OX - VR4ALL', 'Confidential Mission VR'))) {
             $changed = @($badging | ForEach-Object { $_.Replace($case[1],$case[2]) })
             Check "wrong APK $($case[0]) rejected" (@(Find-AppIdentityFault $changed $tree 'abc123' $false).Count -gt 0)
